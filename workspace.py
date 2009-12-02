@@ -30,7 +30,14 @@ def findrepos(path):
                 repos.extend(findrepos(newpath))
         return repos
 
-class Git():
+class WrappedFile:
+    def __init__(self, path):
+        self.file = open(path, "r")
+
+    def readline(self):
+        return self.file.readline().lstrip()
+
+class Git:
     def __init__(self, path):
         self.path = path
         os.chdir(self.path)
@@ -39,14 +46,7 @@ class Git():
 
     def getConfig(self):
         config = ConfigParser.ConfigParser()
-        file = open(".git/config", "r")
-        lines = [l.strip() for l in file]
-        file.close()
-        file = open(".git/config.tm~", "w")
-        file.write("\n".join(lines))
-        file.close()
-        config.read(".git/config.tm~")
-        os.remove(".git/config.tm~")
+        config.readfp(WrappedFile(".git/config"))
         return config
 
     def buildStatusString(self):
