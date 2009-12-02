@@ -1,15 +1,22 @@
 #!/usr/bin/env python
 import os, re, ConfigParser
 
-workspaces = [os.path.expanduser("~/workspace/python"),
-              os.path.expanduser("~/workspace/web")]
-
 def workspace():
     repos = []
-    for w in workspaces:
+    for w in getworkspaces():
         repos.extend(findrepos(w))
     for repo in repos:
         print repo.statusstring
+
+def getworkspaces():
+    config = ConfigParser.ConfigParser()
+    succed = config.read([os.path.expanduser("~/.backupscripts.conf")])
+    if 0 == len(succed) or not config.has_section("workspace"):
+        config.add_section("workspace")
+        config.set("workspace", "randomname", "~/workspace")
+        with open(os.path.expanduser("~/.backupscripts.conf"), "w") as configfile:
+            config.write(configfile)
+    return [os.path.expanduser(w[1]) for w in config.items("workspace")]
 
 def findrepos(path):
     entries = os.listdir(path)
