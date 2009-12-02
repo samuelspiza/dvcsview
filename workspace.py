@@ -4,7 +4,7 @@ import os, re, ConfigParser
 def workspace():
     repos = []
     for w in getworkspaces():
-        repos.extend(findrepos(w))
+        findrepos(w, repos)
     for repo in repos:
         print repo.statusstring
 
@@ -18,17 +18,15 @@ def getworkspaces():
             config.write(configfile)
     return [os.path.expanduser(w[1]) for w in config.items("workspace")]
 
-def findrepos(path):
+def findrepos(path, repos):
     entries = os.listdir(path)
     if ".git" in entries:
-        return [Git(path)]
+        repos.append(Git(path))
     else:
-        repos = []
         for entry in entries:
             newpath = os.path.join(path, entry)
             if os.path.isdir(newpath):
-                repos.extend(findrepos(newpath))
-        return repos
+                findrepos(newpath, repos)
 
 class WrappedFile:
     def __init__(self, path):
