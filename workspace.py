@@ -51,28 +51,36 @@ class Git:
 
     def getTrackingBranches(self):
         branches = [s for s in self.config.sections() if s.startswith("branch")]
-        return [b[8:-1] for b in branches if self.config.has_option(b, "merge")]
+        return dict([(b[8:-1], None) for b in branches
+                     if self.config.has_option(b, "merge")])
 
     def buildStatusString(self):
         status = self.gitStatus()
         if status[-1][:17] != "nothing to commit":
-            return "NOT CLEAN " + self.path + "\n  " + status[1]
+            return "NOT CLEAN " + self.path + self.gitWarnings(status)
         else:
-            statusstring = "CLEAN " + self.path
+            return "CLEAN " + self.path + self.gitWarningsAllBranches(status)
+
+    def gitWarningsAllBranches(self, status):
         defaultbranch = status[0][12:]
-        for b in self.trackingbranches:
-            if b != status[0][12:]:
-                self.gitCheckout(b)
-            status = self.gitStatus()
-            if 2 < len(status):
-                statusstring = statusstring + "\n  " + status[0] + ": " + status[1][2:]
+        for b in self.trackingbranches.items():
+            if b[0] != status[0][12:]:
+                self.gitCheckout(b[0])
+                status = self.gitStatus()
         if status[0][12:] != defaultbranch:
             self.gitCheckout(defaultbranch)
-        return statusstring
+        return "".join([self.gitWarnings(s) for s in self.trackingbranches.values()])
+
+    def gitWarnings(self, status):
+        return "".join(["\n  " + status[0] + ":" + s[1:] for s in status[1:]
+                        if s.startswith("# ") and
+                           not s[1:].startswith("  ")])
 
     def gitStatus(self):
         pipe = Popen("git status", shell=True, stdout=PIPE).stdout
-        return [l.strip() for l in pipe.readlines()]
+        status = [l.strip() for l in pipe.readlines()]
+        self.trackingbranches[status[0][12:]] = status
+        return status
 
     def gitCheckout(self, branch):
         retcode = call("git" + " checkout " + branch, shell=True)
