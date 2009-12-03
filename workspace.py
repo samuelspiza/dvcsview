@@ -1,33 +1,54 @@
 #!/usr/bin/env python
 import os, re, ConfigParser
-from subprocess import call, Popen, PIPE, STDOUT
+from subprocess import call, Popen, PIPE
 
 def workspace():
     repos = []
-    for w in getworkspaces():
-        findrepos(w, repos)
+    config = getConfig()
+    for w in getworkspaces(config):
+        findrepos(w, repos, config)
     for repo in repos:
         print repo.statusstring
 
-def getworkspaces():
+def getConfig():
     config = ConfigParser.ConfigParser()
     succed = config.read([os.path.expanduser("~/.backupscripts.conf")])
+    ok = True and getConfigWorkspace(config, succed)
+    ok = ok and getConfigWorkspaceGit(config, succed)
+    if not ok:
+        with open(os.path.expanduser("~/.backupscripts.conf"), "w") as configfile:
+            config.write(configfile)
+    return config
+
+def getConfigWorkspace(config, succed):
     if 0 == len(succed) or not config.has_section("workspace"):
         config.add_section("workspace")
         config.set("workspace", "randomname", "~/workspace")
-        with open(os.path.expanduser("~/.backupscripts.conf"), "w") as configfile:
-            config.write(configfile)
+        return False
+    return True
+
+def getConfigWorkspaceGit(config, succed):
+    if 0 == len(succed) or not config.has_section("workspace-git"):
+        config.add_section("workspace-git")
+        if os.name == "nt":
+            config.set("workspace-git", "git", "C:\msysgit\git\git.exe")
+        else:
+            config.set("workspace-git", "git", "git")
+        return False
+    return True
+
+def getworkspaces(config):
     return [os.path.expanduser(w[1]) for w in config.items("workspace")]
 
-def findrepos(path, repos):
+def findrepos(path, repos, config):
     entries = os.listdir(path)
     if ".git" in entries:
-        repos.append(Git(path))
+        repos.append(Git(path, config))
     else:
         for entry in entries:
             newpath = os.path.join(path, entry)
             if os.path.isdir(newpath):
-                findrepos(newpath, repos)
+                findrepos(newpath, repos, config)
 
 class WrappedFile:
     def __init__(self, path):
@@ -37,22 +58,23 @@ class WrappedFile:
         return self.file.readline().lstrip()
 
 class Git:
-    def __init__(self, path):
+    def __init__(self, path, config):
         self.path = path
         os.chdir(self.path)
-        self.config = self.getConfig()
+        self.config = config
+        self.gitconfig = self.gitConfig()
         self.trackingbranches = self.getTrackingBranches()
         self.statusstring = self.buildStatusString()
 
-    def getConfig(self):
-        config = ConfigParser.ConfigParser()
-        config.readfp(WrappedFile(".git/config"))
-        return config
+    def gitConfig(self):
+        gitconfig = ConfigParser.ConfigParser()
+        gitconfig.readfp(WrappedFile(".git/config"))
+        return gitconfig
 
     def getTrackingBranches(self):
-        branches = [s for s in self.config.sections() if s.startswith("branch")]
+        branches = [s for s in self.gitconfig.sections() if s.startswith("branch")]
         return dict([(b[8:-1], None) for b in branches
-                     if self.config.has_option(b, "merge")])
+                     if self.gitconfig.has_option(b, "merge")])
 
     def buildStatusString(self):
         status = self.gitStatus()
@@ -77,13 +99,15 @@ class Git:
                            not s[1:].startswith("  ")])
 
     def gitStatus(self):
-        pipe = Popen("git status", shell=True, stdout=PIPE).stdout
+        pipe = Popen(self.config.get("workspace-git", "git") + " status", 
+                     shell=True, stdout=PIPE).stdout
         status = [l.strip() for l in pipe.readlines()]
         self.trackingbranches[status[0][12:]] = status
         return status
 
     def gitCheckout(self, branch):
-        retcode = call("git" + " checkout " + branch, shell=True)
+        retcode = call(self.config.get("workspace-git", "git") + " checkout " + branch,
+                       shell=True)
 
     def __str__(self):
         return self.path
