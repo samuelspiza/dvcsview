@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import os, re, ConfigParser
+import sys, os, re, ConfigParser
 from subprocess import call, Popen, PIPE
 
 def workspace():
@@ -11,13 +11,16 @@ def workspace():
         print repo.statusstring
 
 def getConfig():
+    conffile = os.path.expanduser("~/.backupscripts.conf")
     config = ConfigParser.ConfigParser()
-    succed = config.read([os.path.expanduser("~/.backupscripts.conf")])
-    ok = True and getConfigWorkspace(config, succed)
-    ok = ok and getConfigWorkspaceGit(config, succed)
+    succed = config.read([conffile])
+    ok = getConfigWorkspace(config, succed)
+    ok = getConfigWorkspaceGit(config, succed) and ok
     if not ok:
-        with open(os.path.expanduser("~/.backupscripts.conf"), "w") as configfile:
+        with open(conffile, "w") as configfile:
             config.write(configfile)
+        print "Please modify '" + conffile + "' according to your setup."
+        sys.exit()
     return config
 
 def getConfigWorkspace(config, succed):
