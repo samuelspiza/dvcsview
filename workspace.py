@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import os, re, ConfigParser
+from subprocess import call, Popen, PIPE, STDOUT
 
 def workspace():
     repos = []
@@ -40,6 +41,7 @@ class Git:
         self.path = path
         os.chdir(self.path)
         self.config = self.getConfig()
+        self.trackingbranches = self.getTrackingBranches()
         self.statusstring = self.buildStatusString()
 
     def getConfig(self):
@@ -47,16 +49,33 @@ class Git:
         config.readfp(WrappedFile(".git/config"))
         return config
 
+    def getTrackingBranches(self):
+        branches = [s for s in self.config.sections() if s.startswith("branch")]
+        return [b[8:-1] for b in branches if self.config.has_option(b, "merge")]
+
     def buildStatusString(self):
-        status = [l.strip() for l in os.popen("git status").readlines()]
+        status = self.gitStatus()
         if status[-1][:17] != "nothing to commit":
-            statusstring = "NOT CLEAN " + self.path
+            return "NOT CLEAN " + self.path + "\n  " + status[1]
         else:
             statusstring = "CLEAN " + self.path
-        if 2 < len(status):
-            warnings = ["  " + s for s in status[1:-2] if 0 < len(s[1:].strip())]
-            statusstring = statusstring + "\n" + "\n".join(warnings[:3])
+        defaultbranch = status[0][12:]
+        for b in self.trackingbranches:
+            if b != status[0][12:]:
+                self.gitCheckout(b)
+            status = self.gitStatus()
+            if 2 < len(status):
+                statusstring = statusstring + "\n  " + status[0] + ": " + status[1][2:]
+        if status[0][12:] != defaultbranch:
+            self.gitCheckout(defaultbranch)
         return statusstring
+
+    def gitStatus(self):
+        pipe = Popen("git status", shell=True, stdout=PIPE).stdout
+        return [l.strip() for l in pipe.readlines()]
+
+    def gitCheckout(self, branch):
+        retcode = call("git" + " checkout " + branch, shell=True)
 
     def __str__(self):
         return self.path
