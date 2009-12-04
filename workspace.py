@@ -14,8 +14,8 @@ def getConfig():
     conffile = os.path.expanduser("~/.backupscripts.conf")
     config = ConfigParser.ConfigParser()
     succed = config.read([conffile])
-    ok = getConfigWorkspace(config, succed)
-    ok = getConfigWorkspaceGit(config, succed) and ok
+    ok = getConfigWorkspaceGit(config, succed)
+    ok = getConfigWorkspace(config, succed) and ok
     if not ok:
         with open(conffile, "w") as configfile:
             config.write(configfile)
@@ -23,22 +23,22 @@ def getConfig():
         sys.exit()
     return config
 
-def getConfigWorkspace(config, succed):
-    if 0 == len(succed) or not config.has_section("workspace"):
-        config.add_section("workspace")
-        config.set("workspace", "randomname", "~/workspace")
-        return False
-    return True
-
 def getConfigWorkspaceGit(config, succed):
-    if 0 == len(succed) or not config.has_section("workspace-git"):
-        config.add_section("workspace-git")
-        if os.name == "nt":
-            config.set("workspace-git", "git", "C:\msysgit\git\git.exe")
-        else:
-            config.set("workspace-git", "git", "git")
-        return False
-    return True
+    if 0 < len(succed) and config.has_section("workspace-git"):
+        return True
+    config.add_section("workspace-git")
+    if os.name == "nt":
+        config.set("workspace-git", "git", "C:\msysgit\git\git.exe")
+    else:
+        config.set("workspace-git", "git", "git")
+    return False
+
+def getConfigWorkspace(config, succed):
+    if 0 < len(succed) and config.has_section("workspace"):
+        return True
+    config.add_section("workspace")
+    config.set("workspace", "randomname", "~/workspace")
+    return False
 
 def getworkspaces(config):
     return [os.path.expanduser(w[1]) for w in config.items("workspace")]
