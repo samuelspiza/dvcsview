@@ -2,7 +2,7 @@
 import sys, os, re, ConfigParser
 from subprocess import call, Popen, PIPE
 
-def workspace():
+def gitview():
     repos = []
     config = getConfig()
     for w in getworkspaces(config):
@@ -11,7 +11,7 @@ def workspace():
         print repo.statusstring
 
 def getConfig():
-    conffile = os.path.expanduser("~/.backupscripts.conf")
+    conffile = os.path.expanduser("~/.gitview.conf")
     config = ConfigParser.ConfigParser()
     succed = config.read([conffile])
     ok = getConfigWorkspaceGit(config, succed)
@@ -24,24 +24,24 @@ def getConfig():
     return config
 
 def getConfigWorkspaceGit(config, succed):
-    if 0 < len(succed) and config.has_section("workspace-git"):
+    if 0 < len(succed) and config.has_section("commands"):
         return True
-    config.add_section("workspace-git")
+    config.add_section("commands")
     if os.name == "nt":
-        config.set("workspace-git", "git", "C:\msysgit\git\git.exe")
+        config.set("commands", "git", "C:\msysgit\git\git.exe")
     else:
-        config.set("workspace-git", "git", "git")
+        config.set("commands", "git", "git")
     return False
 
 def getConfigWorkspace(config, succed):
-    if 0 < len(succed) and config.has_section("workspace"):
+    if 0 < len(succed) and config.has_section("workspaces"):
         return True
-    config.add_section("workspace")
-    config.set("workspace", "randomname", "~/workspace")
+    config.add_section("workspaces")
+    config.set("workspaces", "workspace0", "~/workspace")
     return False
 
 def getworkspaces(config):
-    return [os.path.expanduser(w[1]) for w in config.items("workspace")]
+    return [os.path.expanduser(w[1]) for w in config.items("workspaces")]
 
 def findrepos(path, repos, config):
     entries = os.listdir(path)
@@ -102,14 +102,14 @@ class Git:
                            not s[1:].startswith("  ")])
 
     def gitStatus(self):
-        pipe = Popen(self.config.get("workspace-git", "git") + " status", 
+        pipe = Popen(self.config.get("commands", "git") + " status", 
                      shell=True, stdout=PIPE).stdout
         status = [l.strip() for l in pipe.readlines()]
         self.trackingbranches[status[0][12:]] = status
         return status
 
     def gitCheckout(self, branch):
-        retcode = call(self.config.get("workspace-git", "git") + " checkout " + branch,
+        retcode = call(self.config.get("commands", "git") + " checkout " + branch,
                        shell=True)
 
     def __str__(self):
@@ -117,4 +117,4 @@ class Git:
 
 
 if __name__ == "__main__":
-    workspace()
+    gitview()
