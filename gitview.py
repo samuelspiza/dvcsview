@@ -1,6 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/python
+
 import sys, os, re, ConfigParser
 from subprocess import call, Popen, PIPE
+
+CONFIGFILE = "~/.gitview.conf"
+WORKSPACES = "gitview-workspaces"
+COMMANDS = "gitview-commands"
 
 def gitview():
     repos = []
@@ -11,11 +16,11 @@ def gitview():
         print repo.statusstring
 
 def getConfig():
-    conffile = os.path.expanduser("~/.gitview.conf")
+    conffile = os.path.expanduser(CONFIGFILE)
     config = ConfigParser.ConfigParser()
     succed = config.read([conffile])
-    ok = getConfigWorkspaceGit(config, succed)
-    ok = getConfigWorkspace(config, succed) and ok
+    ok = getConfigCommands(config, succed)
+    ok = getConfigWorkspaces(config, succed) and ok
     if not ok:
         with open(conffile, "w") as configfile:
             config.write(configfile)
@@ -23,25 +28,25 @@ def getConfig():
         sys.exit()
     return config
 
-def getConfigWorkspaceGit(config, succed):
-    if 0 < len(succed) and config.has_section("commands"):
+def getConfigCommands(config, succed):
+    if 0 < len(succed) and config.has_section(COMMANDS):
         return True
-    config.add_section("commands")
+    config.add_section(COMMANDS)
     if os.name == "nt":
-        config.set("commands", "git", "C:\msysgit\git\git.exe")
+        config.set(COMMANDS, "git", "C:\msysgit\git\git.exe")
     else:
-        config.set("commands", "git", "git")
+        config.set(COMMANDS, "git", "git")
     return False
 
-def getConfigWorkspace(config, succed):
-    if 0 < len(succed) and config.has_section("workspaces"):
+def getConfigWorkspaces(config, succed):
+    if 0 < len(succed) and config.has_section(WORKSPACES):
         return True
-    config.add_section("workspaces")
-    config.set("workspaces", "workspace0", "~/workspace")
+    config.add_section(WORKSPACES)
+    config.set(WORKSPACES, "workspace0", "~/workspace")
     return False
 
 def getworkspaces(config):
-    return [os.path.expanduser(w[1]) for w in config.items("workspaces")]
+    return [os.path.expanduser(w[1]) for w in config.items(WORKSPACES)]
 
 def findrepos(path, repos, config):
     entries = os.listdir(path)
@@ -102,19 +107,15 @@ class Git:
                            not s[1:].startswith("  ")])
 
     def gitStatus(self):
-        pipe = Popen(self.config.get("commands", "git") + " status", 
+        pipe = Popen(self.config.get(COMMANDS, "git") + " status", 
                      shell=True, stdout=PIPE).stdout
         status = [l.strip() for l in pipe.readlines()]
         self.trackingbranches[status[0][12:]] = status
         return status
 
     def gitCheckout(self, branch):
-        retcode = call(self.config.get("commands", "git") + " checkout " + branch,
+        retcode = call(self.config.get(COMMANDS, "git") + " checkout " + branch,
                        shell=True)
-
-    def __str__(self):
-        return self.path
-
 
 if __name__ == "__main__":
     gitview()
