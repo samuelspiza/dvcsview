@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 '''
 Gitview is hosted on Github. Checkout:
@@ -104,7 +104,8 @@ class Git:
         return gitconfig
 
     def getTrackingBranches(self):
-        branches = [s for s in self.gitconfig.sections() if s.startswith("branch")]
+        branches = [s for s in self.gitconfig.sections()
+                      if s.startswith("branch")]
         return dict([(b[8:-1], None) for b in branches
                      if self.gitconfig.has_option(b, "merge")])
 
@@ -123,7 +124,8 @@ class Git:
                 status = self.gitStatus()
         if status[0][12:] != defaultbranch:
             self.gitCheckout(defaultbranch)
-        return "".join([self.gitWarnings(s) for s in self.trackingbranches.values()])
+        statuslist = self.trackingbranches.values()
+        return "".join([self.gitWarnings(s) for s in statuslist])
 
     def gitWarnings(self, status):
         return "".join(["\n  " + status[0] + ":" + s[1:] for s in status[1:]
