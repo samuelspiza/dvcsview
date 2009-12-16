@@ -1,5 +1,25 @@
 #!/usr/bin/python
 
+'''
+Gitview is hosted on Github. Checkout:
+http://github.com/samuelspiza/gitview
+
+A template for the '~/.gitview.conf' can be found under:
+http://gist.github.com/258034
+
+The git command used by gitview can be configured via the config file.
+
+Running git in cmd on windows machines requires additional work. The 'git.exe' 
+provided by msysgit project requires several DLL-files. These files get 
+installed in '%msysgit%\mingw\bin' by default. You have to provide following 
+DLLs in '%mysysgit%\git' (e.g. copy them):
+ - libcrypto.dll
+ - libcurl-4.dll
+ - libiconv2.dll
+ - libssl.dll
+ - pthreadGC2.dll
+'''
+
 import sys, os, re, ConfigParser
 from subprocess import call, Popen, PIPE
 
@@ -24,7 +44,11 @@ def getConfig():
     if not ok:
         with open(conffile, "w") as configfile:
             config.write(configfile)
-        print "Please modify '" + conffile + "' according to your setup."
+        s = "Check http://gist.github.com/258034 for a template config file.\n"
+        s = s + "The template contains additional information about "
+        s = s + "configuring gitview.\n"
+        s = s + "Please modify '" + conffile + "' according to your setup."
+        print s
         sys.exit()
     return config
 
