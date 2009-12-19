@@ -70,7 +70,12 @@ def getConfigWorkspaces(config, succed):
     return False
 
 def getworkspaces(config):
-    return [os.path.expanduser(w[1]) for w in config.items(WORKSPACES)]
+    workspaces = [os.path.expanduser(w[1]) for w in config.items(WORKSPACES)]
+    for w in workspaces[:]:
+        if not os.path.exists(w):
+            print "ERROR: Workspace '" + w + "' does not exist.\n"
+            workspaces.remove(w)
+	return workspaces
 
 def findrepos(path, repos, config):
     entries = os.listdir(path)
