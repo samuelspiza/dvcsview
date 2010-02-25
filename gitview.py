@@ -20,7 +20,7 @@ DLLs in '%mysysgit%\git' (e.g. copy them):
  - pthreadGC2.dll
 '''
 
-import sys, os, re, ConfigParser
+import sys, os, ConfigParser
 from subprocess import call, Popen, PIPE
 
 CONFIGFILE = "~/.gitview.conf"
@@ -75,14 +75,14 @@ def getworkspaces(config):
         if not os.path.exists(w):
             print "ERROR: Workspace '" + w + "' does not exist.\n"
             workspaces.remove(w)
-	return workspaces
+    return workspaces
 
 def findrepos(path, repos, config):
     entries = os.listdir(path)
     if ".git" in entries:
         repos.append(Git(path, config))
-    else:
-        for entry in entries:
+    for entry in entries:
+        if entry != ".git":
             newpath = os.path.join(path, entry)
             if os.path.isdir(newpath):
                 findrepos(newpath, repos, config)
@@ -145,7 +145,7 @@ class Git:
         return status
 
     def gitCheckout(self, branch):
-        retcode = call(self.config.get(COMMANDS, "git") + " checkout " + branch,
+        call(self.config.get(COMMANDS, "git") + " checkout " + branch,
                        shell=True)
 
 if __name__ == "__main__":
