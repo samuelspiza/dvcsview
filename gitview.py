@@ -8,22 +8,12 @@ A template for the '~/.gitview.conf' can be found under:
 http://gist.github.com/258034
 
 The git command used by gitview can be configured via the config file.
-
-Running git in cmd on windows machines requires additional work. The 'git.exe' 
-provided by msysgit project requires several DLL-files. These files get 
-installed in '%msysgit%\mingw\bin' by default. You have to provide following 
-DLLs in '%mysysgit%\git' (e.g. copy them):
- - libcrypto.dll
- - libcurl-4.dll
- - libiconv2.dll
- - libssl.dll
- - pthreadGC2.dll
 '''
 
-import sys, os, ConfigParser, optparse, re
+import os, ConfigParser, optparse, re
 from subprocess import call, Popen, PIPE
 
-CONFIGFILE = "~/.gitview.conf"
+CONFIGFILE = os.path.expanduser("~/.gitview.conf")
 WORKSPACES = "gitview-workspaces"
 COMMANDS = "gitview-commands"
 
@@ -31,50 +21,20 @@ def gitview():
     repos = []
     config = getConfig()
     options = getOptions()
-    if options.fetch is not None:
-        print options.fetch.split(",")
     for w in getworkspaces(config):
         findrepos(w, repos, config, options)
     for repo in repos:
         print repo.statusstring
 
 def getConfig():
-    conffile = os.path.expanduser(CONFIGFILE)
     config = ConfigParser.ConfigParser()
-    succed = config.read([conffile])
-    ok = getConfigCommands(config, succed)
-    ok = getConfigWorkspaces(config, succed) and ok
-    if not ok:
-        with open(conffile, "w") as configfile:
-            config.write(configfile)
-        s = "Check http://gist.github.com/258034 for a template config file.\n"
-        s = s + "The template contains additional information about "
-        s = s + "configuring gitview.\n"
-        s = s + "Please modify '" + conffile + "' according to your setup."
-        print s
-        sys.exit()
+    config.read([CONFIGFILE])
     return config
-
-def getConfigCommands(config, succed):
-    if 0 < len(succed) and config.has_section(COMMANDS):
-        return True
-    config.add_section(COMMANDS)
-    if os.name == "nt":
-        config.set(COMMANDS, "git", "C:\msysgit\git\git.exe")
-    else:
-        config.set(COMMANDS, "git", "git")
-    return False
-
-def getConfigWorkspaces(config, succed):
-    if 0 < len(succed) and config.has_section(WORKSPACES):
-        return True
-    config.add_section(WORKSPACES)
-    config.set(WORKSPACES, "workspace0", "~/workspace")
-    return False
 
 def getOptions():
     parser = optparse.OptionParser()
-    parser.add_option("-f", "--fetch", dest="fetch", metavar="URLS", default=",~,e")
+    parser.add_option("-f", "--fetch", dest="fetch", metavar="URLS",
+                      default=",~,e")
     return parser.parse_args()[0]
 
 def getworkspaces(config):

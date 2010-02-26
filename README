@@ -5,13 +5,3 @@ A template for the '~/.gitview.conf' can be found under:
 http://gist.github.com/258034
 
 The git command used by gitview can be configured via the config file.
-
-Running git in cmd on windows machines requires additional work. The 'git.exe' 
-provided by msysgit project requires several DLL-files. These files get 
-installed in '%msysgit%\mingw\bin' by default. You have to provide following 
-DLLs in '%mysysgit%\git' (e.g. copy them):
- - libcrypto.dll
- - libcurl-4.dll
- - libiconv2.dll
- - libssl.dll
- - pthreadGC2.dll
