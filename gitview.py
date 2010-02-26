@@ -20,7 +20,7 @@ DLLs in '%mysysgit%\git' (e.g. copy them):
  - pthreadGC2.dll
 '''
 
-import sys, os, ConfigParser
+import sys, os, ConfigParser, optparse, re
 from subprocess import call, Popen, PIPE
 
 CONFIGFILE = "~/.gitview.conf"
@@ -30,8 +30,11 @@ COMMANDS = "gitview-commands"
 def gitview():
     repos = []
     config = getConfig()
+    options = getOptions()
+    if options.fetch is not None:
+        print options.fetch.split(",")
     for w in getworkspaces(config):
-        findrepos(w, repos, config)
+        findrepos(w, repos, config, options)
     for repo in repos:
         print repo.statusstring
 
@@ -69,6 +72,11 @@ def getConfigWorkspaces(config, succed):
     config.set(WORKSPACES, "workspace0", "~/workspace")
     return False
 
+def getOptions():
+    parser = optparse.OptionParser()
+    parser.add_option("-f", "--fetch", dest="fetch", metavar="URLS", default=",~,e")
+    return parser.parse_args()[0]
+
 def getworkspaces(config):
     workspaces = [os.path.expanduser(w[1]) for w in config.items(WORKSPACES)]
     for w in workspaces[:]:
@@ -77,15 +85,15 @@ def getworkspaces(config):
             workspaces.remove(w)
     return workspaces
 
-def findrepos(path, repos, config):
+def findrepos(path, repos, config, options):
     entries = os.listdir(path)
     if ".git" in entries:
-        repos.append(Git(path, config))
+        repos.append(Git(path, config, options))
     for entry in entries:
         if entry != ".git":
             newpath = os.path.join(path, entry)
             if os.path.isdir(newpath):
-                findrepos(newpath, repos, config)
+                findrepos(newpath, repos, config, options)
 
 class WrappedFile:
     def __init__(self, path):
@@ -95,11 +103,13 @@ class WrappedFile:
         return self.file.readline().lstrip()
 
 class Git:
-    def __init__(self, path, config):
+    def __init__(self, path, config, options):
         self.path = path
         os.chdir(self.path)
         self.config = config
+        self.options = options
         self.gitconfig = self.gitConfig()
+        self.fetch()
         self.trackingbranches = self.getTrackingBranches()
         self.statusstring = self.buildStatusString()
 
@@ -107,6 +117,21 @@ class Git:
         gitconfig = ConfigParser.ConfigParser()
         gitconfig.readfp(WrappedFile(".git/config"))
         return gitconfig
+
+    def fetch(self):
+        for remote in self.getRemotes():
+            self.gitFetch(remote)
+
+    def getRemotes(self):
+        remotesections = [s for s in self.gitconfig.sections()
+                          if s.startswith("remote")]
+        remotes = []
+        for r in remotesections:
+            regexp = "[\.a-zA-Z0-9]*(?=:(?!//))"
+            m = re.search(regexp, self.gitconfig.get(r, "url"))
+            if m.group(0) in self.options.fetch.split(","):
+                remotes.append(r[8:-1])
+        return remotes
 
     def getTrackingBranches(self):
         branches = [s for s in self.gitconfig.sections()
@@ -146,6 +171,11 @@ class Git:
 
     def gitCheckout(self, branch):
         call(self.config.get(COMMANDS, "git") + " checkout " + branch,
+                       shell=True)
+
+    def gitFetch(self, remote):
+        print "fetch " + self.path
+        call(self.config.get(COMMANDS, "git") + " fetch " + remote,
                        shell=True)
 
 if __name__ == "__main__":
