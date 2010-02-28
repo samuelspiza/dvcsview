@@ -34,7 +34,7 @@ def getConfig():
 def getOptions():
     parser = optparse.OptionParser()
     parser.add_option("-f", "--fetch", dest="fetch", metavar="URLS",
-                      default=",~,e")
+                      default="/home,e")
     return parser.parse_args()[0]
 
 def getworkspaces(config):
@@ -87,7 +87,11 @@ class Git:
                           if s.startswith("remote")]
         remotes = []
         for r in remotesections:
-            regexp = "[\.a-zA-Z0-9]*(?=:(?!//))"
+            ipseg = "[12]?[0-9]{1,2}"
+            ip = "(?<=@)(?:" + ipseg + "\.){3}" + ipseg + "(?=[:/])"
+            url = "(?<=/|@)[a-z0-9-]*\.(?:com|de|net|org)(?=[:/])"
+            d = "^(?:/[a-z]+(?=/)|[a-z]:)"
+            regexp = "|".join([ip, url, d])
             m = re.search(regexp, self.gitconfig.get(r, "url"))
             if m.group(0) in self.options.fetch.split(","):
                 remotes.append(r[8:-1])
