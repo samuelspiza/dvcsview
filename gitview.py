@@ -10,17 +10,17 @@ http://gist.github.com/258034
 The git command used by gitview can be configured via the config file.
 '''
 
-import os, ConfigParser, optparse, re
+import sys, os, ConfigParser, optparse, re
 from subprocess import call, Popen, PIPE
 
 CONFIGFILE = os.path.expanduser("~/.gitview.conf")
 WORKSPACES = "gitview-workspaces"
 COMMANDS = "gitview-commands"
 
-def gitview():
+def main(argv):
     repos = []
     config = getConfig()
-    options = getOptions()
+    options = getOptions(argv)
     for w in getworkspaces(config):
         findrepos(w, repos, config, options)
     for repo in repos:
@@ -31,11 +31,13 @@ def getConfig():
     config.read([CONFIGFILE])
     return config
 
-def getOptions():
+def getOptions(argv):
     parser = optparse.OptionParser()
     parser.add_option("-f", "--fetch", dest="fetch", metavar="URLS",
                       default="/home,e")
-    return parser.parse_args()[0]
+    parser.add_option("-q", "--quiet", action="store_true", dest="quiet",
+                      default=False)
+    return parser.parse_args(argv)[0]
 
 def getworkspaces(config):
     workspaces = [os.path.expanduser(w[1]) for w in config.items(WORKSPACES)]
@@ -49,8 +51,10 @@ def findrepos(path, repos, config, options):
     entries = os.listdir(path)
     if ".git" in entries:
         repos.append(Git(path, config, options))
+    elif ".hg" in entries:
+        repos.append(Hg(path, config, options))
     for entry in entries:
-        if entry != ".git":
+        if entry != ".git" and entry != ".hg":
             newpath = os.path.join(path, entry)
             if os.path.isdir(newpath):
                 findrepos(newpath, repos, config, options)
@@ -62,12 +66,16 @@ class WrappedFile:
     def readline(self):
         return self.file.readline().lstrip()
 
-class Git:
+class Repo:
     def __init__(self, path, config, options):
         self.path = path
         os.chdir(self.path)
         self.config = config
         self.options = options
+
+class Git(Repo):
+    def __init__(self, path, config, options):
+        Repo.__init__(self, path, config, options)
         self.gitconfig = self.gitConfig()
         self.fetch()
         self.trackingbranches = self.getTrackingBranches()
@@ -122,25 +130,46 @@ class Git:
         return "".join([self.gitWarnings(s) for s in statuslist])
 
     def gitWarnings(self, status):
+        if self.options.quiet:
+            return ""
         return "".join(["\n  " + status[0] + ":" + s[1:] for s in status[1:]
                         if s.startswith("# ") and
                            not s[1:].startswith("  ")])
 
     def gitStatus(self):
-        pipe = Popen(self.config.get(COMMANDS, "git") + " status", 
-                     shell=True, stdout=PIPE).stdout
+        pipe = Popen("git status", shell=True, stdout=PIPE).stdout
         status = [l.strip() for l in pipe.readlines()]
         self.trackingbranches[status[0][12:]] = status
         return status
 
     def gitCheckout(self, branch):
-        call(self.config.get(COMMANDS, "git") + " checkout " + branch,
-                       shell=True)
+        call("git checkout %s" % branch, shell=True)
 
     def gitFetch(self, remote):
-        print "fetch " + self.path
-        call(self.config.get(COMMANDS, "git") + " fetch " + remote,
-                       shell=True)
+        print "fetch %s" % self.path
+        call("git fetch %s" % remote, shell=True)
+
+class Hg(Repo):
+    def __init__(self, path, config, options):
+        Repo.__init__(self, path, config, options)
+        self.statusstring = self.buildStatusString()
+    
+    def buildStatusString(self):
+        status = self.hgStatus()
+        print status
+        if 0 < len(status):
+            return "NOT CLEAN %s HG%s" % (self.path, self.hgWarnings(status))
+        else:
+            return "CLEAN %s HG" % self.path
+
+    def hgStatus(self):
+        pipe = Popen("hg status", shell=True, stdout=PIPE).stdout
+        return [l.strip() for l in pipe.readlines()]
+
+    def hgWarnings(self, status):
+        if self.options.quiet:
+            return ""
+        return "".join(["\n  " + s for s in status])
 
 if __name__ == "__main__":
-    gitview()
+    main(sys.argv[1:])
