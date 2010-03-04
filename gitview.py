@@ -100,9 +100,37 @@ class Repo:
         pipe = Popen(command, shell=True, stdout=PIPE).stdout
         return [l.strip() for l in pipe.readlines()]
 
+    def getWarnings(self, status):
+        count = [[c, 0] for c in self.count]
+        mod = []
+        for line in status:
+            if line not in self.skip:
+                for rep in self.replace:
+                    line = re.sub(rep[0], rep[1], line)
+                a = False
+                for i in range(len(count)):
+                    b = line.startswith(count[i][0])
+                    if b:
+                        count[i][1] = count[i][1] + 1
+                    a = a or b
+                if not a:
+                    mod.append(line)
+        for c in count:
+            if 0 < c[1]:
+                c[0] = c[0].replace("#", "").lstrip()
+                if 1 == c[1]:
+                    mod[0:0] = ["# %s: 1 file" % c[0]]
+                else:
+                    mod[0:0] = ["# %s: %s file" % (c[0], c[1])]
+        return mod
+
 class Git(Repo):
     typ = "Git"
     configFile = ".git/config"
+    count = ["#\t%s" % s for s in ["modified", "deleted", "renamed"]]
+    replace = [("Your branch is ahead of '\w*/\w*' by ([0-9]* commits?).",
+                "ahead: \g<1>")]
+    skip = ["# Changed but not updated:"]
     
     def __init__(self, path, options):
         self.trackingbranches = None
@@ -158,17 +186,22 @@ class Git(Repo):
 
     def getWarnings(self, status):
         warnings = []
-        for b in self.trackingbranches.items():
-            status = b[1]
+        for status in self.trackingbranches.values():
             if status is not None:
-                warnings.extend([status[0] + ":" + s[1:] for s in status[1:]
-                                 if s.startswith("# ") and
-                                    not s[1:].startswith("  ")])
+                mod = Repo.getWarnings(self, status[1:])
+                warn = ["  %s" % s for s in mod
+                        if s.startswith("# ") and not s[1:].startswith("  ")]
+                if 0 < len(warn):
+                    warn[0:0] = ["# %s" % status[0][5:]]
+                    warnings.extend(warn)
         return warnings
 
 class Hg(Repo):
     typ = "Hg "
     configFile = ".hg/hgrc"
+    count = ["?", "M"]
+    replace = []
+    skip = []
     
     def __init__(self, path, options):
         Repo.__init__(self, path, options)
@@ -203,7 +236,7 @@ class Hg(Repo):
         return 0 == len(status)
 
     def getWarnings(self, status):
-        return status + self.inout
+        return Repo.getWarnings(self, status) + self.inout
 
 if __name__ == "__main__":
     main(sys.argv[1:])
