@@ -31,7 +31,7 @@ def getConfig():
 def getOptions(argv):
     parser = optparse.OptionParser()
     parser.add_option("-f", "--fetch", dest="fetch", metavar="URLS",
-                      default="/home,e")
+                      default="/home,e:")
     parser.add_option("-q", "--quiet", action="store_true", dest="quiet",
                       default=False)
     return parser.parse_args(argv)[0]
@@ -69,6 +69,12 @@ class Repo:
         os.chdir(self.path)
         self.config = config
         self.options = options
+        ipseg = "[12]?[0-9]{1,2}"
+        ip = "(?<=@)(?:" + ipseg + "\.){3}" + ipseg + "(?=[:/])"
+        url = "(?<=/|@)[a-z0-9-]*\.(?:com|de|net|org)(?=[:/])"
+        d = "^(?:/[a-z]+(?=/)|[a-z]:)"
+        regexp = "|".join([ip, url, d])
+        self.re = re.compile(regexp)
 
 class Git(Repo):
     def __init__(self, path, config, options):
@@ -92,12 +98,7 @@ class Git(Repo):
                           if s.startswith("remote")]
         remotes = []
         for r in remotesections:
-            ipseg = "[12]?[0-9]{1,2}"
-            ip = "(?<=@)(?:" + ipseg + "\.){3}" + ipseg + "(?=[:/])"
-            url = "(?<=/|@)[a-z0-9-]*\.(?:com|de|net|org)(?=[:/])"
-            d = "^(?:/[a-z]+(?=/)|[a-z]:)"
-            regexp = "|".join([ip, url, d])
-            m = re.search(regexp, self.gitconfig.get(r, "url"))
+            m = self.re.search(self.gitconfig.get(r, "url"))
             if m.group(0) in self.options.fetch.split(","):
                 remotes.append(r[8:-1])
         return remotes
@@ -149,24 +150,71 @@ class Git(Repo):
 class Hg(Repo):
     def __init__(self, path, config, options):
         Repo.__init__(self, path, config, options)
+        self.hgconfig = self.hgConfig()
         self.statusstring = self.buildStatusString()
     
+    def hgConfig(self):
+        if os.path.exists(".hg/hgrc"):
+            hgconfig = ConfigParser.ConfigParser()
+            hgconfig.readfp(open(".hg/hgrc"))
+            return hgconfig
+        else:
+            return None
+
     def buildStatusString(self):
         status = self.hgStatus()
-        print status
         if 0 < len(status):
             return "NOT CLEAN Hg  %s%s" % (self.path, self.hgWarnings(status))
         else:
-            return "CLEAN     Hg  %s" % self.path
+            return "CLEAN     Hg  %s%s" % (self.path, self.hgWarnings(status))
+
+    def hgWarnings(self, status):
+        if self.options.quiet:
+            return ""
+        return "".join(["\n  " + s for s in status + self.fetch()])
+
+    def fetch(self):
+        paths = []
+        if self.hgconfig is not None and self.hgconfig.has_option("paths", 'default'):
+            paths.append(('default', self.incoming))
+            if self.hgconfig.has_option("paths", 'default-push'):
+                paths.append(('default-push', self.outgoing))
+            else:
+                paths.append(('default', self.outgoing))
+        fetch = []
+        for p in paths:
+            m = self.re.search(self.hgconfig.get("paths", p[0]))
+            if m.group(0) in self.options.fetch.split(","):
+                line = p[1]()
+                if line is not None:
+                    fetch.append(line)
+        return fetch
+
+    def incoming(self):
+        s = len([l for l in self.hgIncoming() if l.startswith("changeset")])
+        if 0 < s:
+            return "# Incoming: %s changesets" % s
+        else:
+            return None
+
+    def outgoing(self):
+        s = len([l for l in self.hgOutgoing() if l.startswith("changeset")])
+        if 0 < s:
+            return "# Outgoing: %s changesets" % s
+        else:
+            return None
 
     def hgStatus(self):
         pipe = Popen("hg status", shell=True, stdout=PIPE).stdout
         return [l.strip() for l in pipe.readlines()]
 
-    def hgWarnings(self, status):
-        if self.options.quiet:
-            return ""
-        return "".join(["\n  " + s for s in status])
+    def hgIncoming(self):
+        pipe = Popen("hg incoming", shell=True, stdout=PIPE).stdout
+        return [l.strip() for l in pipe.readlines()]
+
+    def hgOutgoing(self):
+        pipe = Popen("hg outgoing", shell=True, stdout=PIPE).stdout
+        return [l.strip() for l in pipe.readlines()]
 
 if __name__ == "__main__":
     main(sys.argv[1:])
