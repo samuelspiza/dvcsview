@@ -1,19 +1,24 @@
 #!/usr/bin/env python
 
 '''
-Gitview is hosted on Github. Checkout:
+Dvcsview helps to keep an overview over Git and Mercurial Repositories. The
+Script searches for all Repos in your workspaces and prints a short status 
+overview. It checks for uncommited changes in the working directory and if 
+configured pull/push-repos are in sync.
+
+Dvcsview is hosted on Github. Checkout:
 http://github.com/samuelspiza/gitview
 
-A template for the '.gitview.conf' can be found under:
+A template for the '.dvcsview.conf' can be found under:
 http://gist.github.com/258034
 '''
 
 import sys, os, ConfigParser, optparse, re
 from subprocess import call, Popen, PIPE
 
-CONFIGFILES = [os.path.expanduser("~/.gitview.conf"), ".gitview.conf"]
-WORKSPACES = "gitview-workspaces"
-FETCH = "gitview-fetch"
+CONFIGFILES = [os.path.expanduser("~/.dvcsview.conf"), ".dvcsview.conf"]
+WORKSPACES = "workspaces"
+FETCH = "fetch"
 
 def main(argv):
     repos = []
@@ -36,7 +41,7 @@ def getConfig():
 def getOptions(argv):
     parser = optparse.OptionParser()
     parser.add_option("-f", "--fetch", dest="fetch", metavar="URLS",
-                      default="/home,e:")
+                      default="")
     parser.add_option("-q", "--quiet", action="store_true", dest="quiet",
                       default=False)
     return parser.parse_args(argv)[0]
