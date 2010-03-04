@@ -19,7 +19,7 @@ def main(argv):
     config = getConfig()
     options = getOptions(argv)
     for w in getworkspaces(config):
-        findrepos(w, repos, config, options)
+        findrepos(w, repos, options)
     for repo in repos:
         print repo.statusstring
 
@@ -44,17 +44,17 @@ def getworkspaces(config):
             workspaces.remove(w)
     return workspaces
 
-def findrepos(path, repos, config, options):
+def findrepos(path, repos, options):
     entries = os.listdir(path)
     if ".git" in entries:
-        repos.append(Git(path, config, options))
+        repos.append(Git(path, options))
     elif ".hg" in entries:
-        repos.append(Hg(path, config, options))
+        repos.append(Hg(path, options))
     for entry in entries:
         if entry != ".git" and entry != ".hg":
             newpath = os.path.join(path, entry)
             if os.path.isdir(newpath):
-                findrepos(newpath, repos, config, options)
+                findrepos(newpath, repos, options)
 
 class WrappedFile:
     def __init__(self, path):
@@ -64,157 +64,146 @@ class WrappedFile:
         return self.file.readline().lstrip()
 
 class Repo:
-    def __init__(self, path, config, options):
+    def __init__(self, path, options):
         self.path = path
         os.chdir(self.path)
-        self.config = config
         self.options = options
+        self.config = self.getConfig()
         ipseg = "[12]?[0-9]{1,2}"
         ip = "(?<=@)(?:" + ipseg + "\.){3}" + ipseg + "(?=[:/])"
         url = "(?<=/|@)[a-z0-9-]*\.(?:com|de|net|org)(?=[:/])"
         d = "^(?:/[a-z]+(?=/)|[a-z]:)"
         regexp = "|".join([ip, url, d])
         self.re = re.compile(regexp)
-
-class Git(Repo):
-    def __init__(self, path, config, options):
-        Repo.__init__(self, path, config, options)
-        self.gitconfig = self.gitConfig()
         self.fetch()
-        self.trackingbranches = self.getTrackingBranches()
         self.statusstring = self.buildStatusString()
 
-    def gitConfig(self):
-        gitconfig = ConfigParser.ConfigParser()
-        gitconfig.readfp(WrappedFile(".git/config"))
-        return gitconfig
+    def getConfig(self):
+        config = None
+        if os.path.exists(self.configFile):
+            config = ConfigParser.ConfigParser()
+            config.readfp(open(self.configFile))
+        return config
+
+    def buildStatusString(self):
+        status = self.getStatus()
+        if self.isClean(status):
+            isClean = "CLEAN    "
+        else:
+            isClean = "NOT CLEAN"
+        text = self.path
+        if not self.options.quiet:
+            text = "\n  ".join([text] + self.getWarnings(status))
+        return "%s %s %s" % (isClean, self.typ, text)
+
+    def pipe(self, command):
+        pipe = Popen(command, shell=True, stdout=PIPE).stdout
+        return [l.strip() for l in pipe.readlines()]
+
+class Git(Repo):
+    typ = "Git"
+    configFile = ".git/config"
+    
+    def __init__(self, path, options):
+        self.trackingbranches = None
+        Repo.__init__(self, path, options)
+
+    def getConfig(self):
+        config = ConfigParser.ConfigParser()
+        config.readfp(WrappedFile(self.configFile))
+        return config
 
     def fetch(self):
         for remote in self.getRemotes():
-            self.gitFetch(remote)
+            print "fetch %s" % self.path
+            call("git fetch %s" % remote, shell=True)
 
     def getRemotes(self):
-        remotesections = [s for s in self.gitconfig.sections()
+        remotesections = [s for s in self.config.sections()
                           if s.startswith("remote")]
         remotes = []
         for r in remotesections:
-            m = self.re.search(self.gitconfig.get(r, "url"))
+            m = self.re.search(self.config.get(r, "url"))
             if m.group(0) in self.options.fetch.split(","):
                 remotes.append(r[8:-1])
         return remotes
 
-    def getTrackingBranches(self):
-        branches = [s for s in self.gitconfig.sections()
-                      if s.startswith("branch")]
-        return dict([(b[8:-1], None) for b in branches
-                     if self.gitconfig.has_option(b, "merge")])
-
-    def buildStatusString(self):
-        status = self.gitStatus()
-        if status[-1][:17] != "nothing to commit":
-            return "NOT CLEAN Git " + self.path + self.gitWarnings(status)
-        else:
-            return "CLEAN     Git " + self.path + self.gitWarningsAllBranches(status)
-
-    def gitWarningsAllBranches(self, status):
-        defaultbranch = status[0][12:]
-        for b in self.trackingbranches.items():
-            if b[0] != status[0][12:]:
-                self.gitCheckout(b[0])
-                status = self.gitStatus()
-        if status[0][12:] != defaultbranch:
-            self.gitCheckout(defaultbranch)
-        statuslist = self.trackingbranches.values()
-        return "".join([self.gitWarnings(s) for s in statuslist])
-
-    def gitWarnings(self, status):
-        if self.options.quiet:
-            return ""
-        return "".join(["\n  " + status[0] + ":" + s[1:] for s in status[1:]
-                        if s.startswith("# ") and
-                           not s[1:].startswith("  ")])
-
-    def gitStatus(self):
-        pipe = Popen("git status", shell=True, stdout=PIPE).stdout
-        status = [l.strip() for l in pipe.readlines()]
+    def getStatus(self):
+        if self.trackingbranches is None:
+            self.trackingbranches = self.getTrackingBranches()
+        status = self.pipe("git status")
         self.trackingbranches[status[0][12:]] = status
         return status
 
-    def gitCheckout(self, branch):
-        call("git checkout %s" % branch, shell=True)
+    def getTrackingBranches(self):
+        branches = [s for s in self.config.sections()
+                      if s.startswith("branch")]
+        return dict([(b[8:-1], None) for b in branches
+                     if self.config.has_option(b, "merge")])
 
-    def gitFetch(self, remote):
-        print "fetch %s" % self.path
-        call("git fetch %s" % remote, shell=True)
+    def isClean(self, status):
+        b = status[-1][:17] == "nothing to commit"
+        if b:
+            self.allBranches(status)
+        return b
+
+    def allBranches(self, status):
+        defaultbranch = status[0][12:]
+        for b in self.trackingbranches.items():
+            if b[0] != status[0][12:]:
+                call("git checkout %s" % b[0], shell=True)
+                status = self.gitStatus()
+        if status[0][12:] != defaultbranch:
+            call("git checkout %s" % defaultbranch, shell=True)
+
+    def getWarnings(self, status):
+        warnings = []
+        for b in self.trackingbranches.items():
+            status = b[1]
+            if status is not None:
+                warnings.extend([status[0] + ":" + s[1:] for s in status[1:]
+                                 if s.startswith("# ") and
+                                    not s[1:].startswith("  ")])
+        return warnings
 
 class Hg(Repo):
-    def __init__(self, path, config, options):
-        Repo.__init__(self, path, config, options)
-        self.hgconfig = self.hgConfig()
-        self.statusstring = self.buildStatusString()
+    typ = "Hg "
+    configFile = ".hg/hgrc"
     
-    def hgConfig(self):
-        if os.path.exists(".hg/hgrc"):
-            hgconfig = ConfigParser.ConfigParser()
-            hgconfig.readfp(open(".hg/hgrc"))
-            return hgconfig
-        else:
-            return None
-
-    def buildStatusString(self):
-        status = self.hgStatus()
-        if 0 < len(status):
-            return "NOT CLEAN Hg  %s%s" % (self.path, self.hgWarnings(status))
-        else:
-            return "CLEAN     Hg  %s%s" % (self.path, self.hgWarnings(status))
-
-    def hgWarnings(self, status):
-        if self.options.quiet:
-            return ""
-        return "".join(["\n  " + s for s in status + self.fetch()])
-
+    def __init__(self, path, options):
+        Repo.__init__(self, path, options)
+    
     def fetch(self):
         paths = []
-        if self.hgconfig is not None and self.hgconfig.has_option("paths", 'default'):
-            paths.append(('default', self.incoming))
-            if self.hgconfig.has_option("paths", 'default-push'):
-                paths.append(('default-push', self.outgoing))
+        if self.config is not None and self.config.has_option("paths", 'default'):
+            paths.append(('default', "hg incoming"))
+            if self.config.has_option("paths", 'default-push'):
+                paths.append(('default-push', "hg outgoing"))
             else:
-                paths.append(('default', self.outgoing))
-        fetch = []
+                paths.append(('default', "hg outgoing"))
+        self.inout = []
         for p in paths:
-            m = self.re.search(self.hgconfig.get("paths", p[0]))
+            m = self.re.search(self.config.get("paths", p[0]))
             if m.group(0) in self.options.fetch.split(","):
-                line = p[1]()
+                line = self.traffic(p[1])
                 if line is not None:
-                    fetch.append(line)
-        return fetch
-
-    def incoming(self):
-        s = len([l for l in self.hgIncoming() if l.startswith("changeset")])
+                    self.inout.append(line)
+ 
+    def traffic(self, cmd):
+        s = len([l for l in self.pipe(cmd) if l.startswith("changeset")])
         if 0 < s:
-            return "# Incoming: %s changesets" % s
+            return "# %s: %s changesets" % (cmd[3:], s)
         else:
             return None
 
-    def outgoing(self):
-        s = len([l for l in self.hgOutgoing() if l.startswith("changeset")])
-        if 0 < s:
-            return "# Outgoing: %s changesets" % s
-        else:
-            return None
+    def getStatus(self):
+        return self.pipe("hg status")
 
-    def hgStatus(self):
-        pipe = Popen("hg status", shell=True, stdout=PIPE).stdout
-        return [l.strip() for l in pipe.readlines()]
+    def isClean(self, status):
+        return 0 == len(status)
 
-    def hgIncoming(self):
-        pipe = Popen("hg incoming", shell=True, stdout=PIPE).stdout
-        return [l.strip() for l in pipe.readlines()]
-
-    def hgOutgoing(self):
-        pipe = Popen("hg outgoing", shell=True, stdout=PIPE).stdout
-        return [l.strip() for l in pipe.readlines()]
+    def getWarnings(self, status):
+        return status + self.inout
 
 if __name__ == "__main__":
     main(sys.argv[1:])
