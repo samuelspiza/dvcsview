@@ -4,7 +4,7 @@
 Gitview is hosted on Github. Checkout:
 http://github.com/samuelspiza/gitview
 
-A template for the '~/.gitview.conf' can be found under:
+A template for the '.gitview.conf' can be found under:
 http://gist.github.com/258034
 '''
 
@@ -13,11 +13,16 @@ from subprocess import call, Popen, PIPE
 
 CONFIGFILES = [os.path.expanduser("~/.gitview.conf"), ".gitview.conf"]
 WORKSPACES = "gitview-workspaces"
+FETCH = "gitview-fetch"
 
 def main(argv):
     repos = []
     config = getConfig()
     options = getOptions(argv)
+    if config.has_section(FETCH):
+        for opt in config.options(FETCH):
+            if options.fetch == opt:
+                options.fetch = config.get(FETCH, opt)
     for w in getworkspaces(config):
         findrepos(w, repos, options)
     for repo in repos:
