@@ -6,16 +6,13 @@ http://github.com/samuelspiza/gitview
 
 A template for the '~/.gitview.conf' can be found under:
 http://gist.github.com/258034
-
-The git command used by gitview can be configured via the config file.
 '''
 
 import sys, os, ConfigParser, optparse, re
 from subprocess import call, Popen, PIPE
 
-CONFIGFILE = os.path.expanduser("~/.gitview.conf")
+CONFIGFILES = [os.path.expanduser("~/.gitview.conf"), ".gitview.conf"]
 WORKSPACES = "gitview-workspaces"
-COMMANDS = "gitview-commands"
 
 def main(argv):
     repos = []
@@ -28,7 +25,7 @@ def main(argv):
 
 def getConfig():
     config = ConfigParser.ConfigParser()
-    config.read([CONFIGFILE])
+    config.read(CONFIGFILES)
     return config
 
 def getOptions(argv):
@@ -114,9 +111,9 @@ class Git(Repo):
     def buildStatusString(self):
         status = self.gitStatus()
         if status[-1][:17] != "nothing to commit":
-            return "NOT CLEAN " + self.path + self.gitWarnings(status)
+            return "NOT CLEAN Git " + self.path + self.gitWarnings(status)
         else:
-            return "CLEAN " + self.path + self.gitWarningsAllBranches(status)
+            return "CLEAN     Git " + self.path + self.gitWarningsAllBranches(status)
 
     def gitWarningsAllBranches(self, status):
         defaultbranch = status[0][12:]
@@ -158,9 +155,9 @@ class Hg(Repo):
         status = self.hgStatus()
         print status
         if 0 < len(status):
-            return "NOT CLEAN %s HG%s" % (self.path, self.hgWarnings(status))
+            return "NOT CLEAN Hg  %s%s" % (self.path, self.hgWarnings(status))
         else:
-            return "CLEAN %s HG" % self.path
+            return "CLEAN     Hg  %s" % self.path
 
     def hgStatus(self):
         pipe = Popen("hg status", shell=True, stdout=PIPE).stdout
