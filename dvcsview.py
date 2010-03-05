@@ -1,17 +1,31 @@
 #!/usr/bin/env python
 
-'''
-Dvcsview helps to keep an overview over Git and Mercurial Repositories. The
-Script searches for all Repos in your workspaces and prints a short status 
-overview. It checks for uncommited changes in the working directory and if 
-configured pull/push-repos are in sync.
+"""
+dvcsview - prints status summary for DVCS repositories
+
+This tool helps to get an overview of the status of Git and Mercurial 
+repositories. The script searches for all repos in your workspaces and prints
+a short statusoverview. It checks for uncommited changes in the working 
+directory and if configured pull/push-repos are in sync.
 
 Dvcsview is hosted on Github. Checkout:
-http://github.com/samuelspiza/gitview
+http://github.com/samuelspiza/dvcsview
+
+Options:
+
+-f HOSTS, --fetch=HOSTS
+  Pull/push-repos on these hosts will be checked if they are in sync. Argument
+  is a comma seperated list of the hosts. Hosts can be IPv4-addresses or
+  domains. Windows driveletters (e.g. 'c:') and 1st level folder in the root
+  directory (e.g. '/home') in Linux systems are possible too. Alias can be
+  configured in '.dvcsview.conf'.
+
+-q, --quiet
+  Only one line pro repo.
 
 A template for the '.dvcsview.conf' can be found under:
 http://gist.github.com/258034
-'''
+"""
 
 import sys, os, ConfigParser, optparse, re
 from subprocess import call, Popen, PIPE
@@ -21,32 +35,34 @@ WORKSPACES = "workspaces"
 FETCH = "fetch"
 
 def main(argv):
-    repos = []
-    config = getConfig()
+    config = ConfigParser.ConfigParser()
+    config.read(CONFIGFILES)
+
     options = getOptions(argv)
+
+    # replace fetch alias with configured hosts
     if config.has_section(FETCH):
         for opt in config.options(FETCH):
             if options.fetch == opt:
                 options.fetch = config.get(FETCH, opt)
-    for w in getworkspaces(config):
-        findrepos(w, repos, options)
+
+    repos = []
+    workspaces = getWorkspaces(config)
+    for workspace in workspaces:
+        # creates 'Git' or 'Hg' objects and appends them to 'repos'
+        findRepos(workspace, repos, options)
     for repo in repos:
         print repo.statusstring
 
-def getConfig():
-    config = ConfigParser.ConfigParser()
-    config.read(CONFIGFILES)
-    return config
-
 def getOptions(argv):
     parser = optparse.OptionParser()
-    parser.add_option("-f", "--fetch", dest="fetch", metavar="URLS",
-                      default="")
-    parser.add_option("-q", "--quiet", action="store_true", dest="quiet",
-                      default=False)
+    parser.add_option("-f", "--fetch",
+                      dest="fetch", metavar="HOSTS", default="")
+    parser.add_option("-q", "--quiet",
+                      action="store_true", dest="quiet", default=False)
     return parser.parse_args(argv)[0]
 
-def getworkspaces(config):
+def getWorkspaces(config):
     workspaces = [os.path.expanduser(w[1]) for w in config.items(WORKSPACES)]
     for w in workspaces[:]:
         if not os.path.exists(w):
@@ -54,17 +70,17 @@ def getworkspaces(config):
             workspaces.remove(w)
     return workspaces
 
-def findrepos(path, repos, options):
+def findRepos(path, repos, options):
     entries = os.listdir(path)
-    if ".git" in entries:
-        repos.append(Git(path, options))
-    elif ".hg" in entries:
-        repos.append(Hg(path, options))
     for entry in entries:
-        if entry != ".git" and entry != ".hg":
+        if entry == ".git":
+            repos.append(Git(path, options))
+        elif entry == ".hg":
+            repos.append(Hg(path, options))
+        else:
             newpath = os.path.join(path, entry)
             if os.path.isdir(newpath):
-                findrepos(newpath, repos, options)
+                findRepos(newpath, repos, options)
 
 class WrappedFile:
     def __init__(self, path):
@@ -131,7 +147,7 @@ class Repo:
                 if 1 == c[1]:
                     mod[0:0] = ["# %s: 1 file" % c[0]]
                 else:
-                    mod[0:0] = ["# %s: %s file" % (c[0], c[1])]
+                    mod[0:0] = ["# %s: %s files" % (c[0], c[1])]
         return mod
 
 class Git(Repo):
@@ -141,7 +157,7 @@ class Git(Repo):
     replace = [("Your branch is ahead of '\w*/\w*' by ([0-9]* commits?).",
                 "ahead: \g<1>")]
     skip = ["# Changed but not updated:"]
-    
+
     def __init__(self, path, options):
         self.trackingbranches = None
         Repo.__init__(self, path, options)
@@ -212,10 +228,7 @@ class Hg(Repo):
     count = ["?", "M"]
     replace = []
     skip = []
-    
-    def __init__(self, path, options):
-        Repo.__init__(self, path, options)
-    
+
     def fetch(self):
         paths = []
         if self.config is not None and self.config.has_option("paths", 'default'):
@@ -231,7 +244,7 @@ class Hg(Repo):
                 line = self.traffic(p[1])
                 if line is not None:
                     self.inout.append(line)
- 
+
     def traffic(self, cmd):
         s = len([l for l in self.pipe(cmd) if l.startswith("changeset")])
         if 0 < s:
