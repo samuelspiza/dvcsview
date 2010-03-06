@@ -2,7 +2,7 @@ dvcsview - prints status summary for DVCS repositories
 
 This tool helps to get an overview of the status of Git and Mercurial 
 repositories. The script searches for all repos in your workspaces and prints
-a short statusoverview. It checks for uncommited changes in the working 
+a short status overview. It checks for uncommited changes in the working 
 directory and if configured pull/push-repos are in sync.
 
 Dvcsview is hosted on Github. Checkout:
@@ -12,8 +12,8 @@ Options:
 
 -f HOSTS, --fetch=HOSTS
   Pull/push-repos on these hosts will be checked if they are in sync. Argument
-  is a comma seperated list of the hosts. Hosts can be IPv4-addresses or
-  domains. Windows driveletters (e.g. 'c:') and 1st level folder in the root
+  is a comma separated list of the hosts. Hosts can be IPv4-addresses or
+  domains. Windows volume letters (e.g. 'c:') and 1st level folder in the root
   directory (e.g. '/home') in Linux systems are possible too. Alias can be
   configured in '.dvcsview.conf'.
 

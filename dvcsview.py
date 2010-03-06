@@ -5,7 +5,7 @@ dvcsview - prints status summary for DVCS repositories
 
 This tool helps to get an overview of the status of Git and Mercurial 
 repositories. The script searches for all repos in your workspaces and prints
-a short statusoverview. It checks for uncommited changes in the working 
+a short status overview. It checks for uncommited changes in the working 
 directory and if configured pull/push-repos are in sync.
 
 Dvcsview is hosted on Github. Checkout:
@@ -15,8 +15,8 @@ Options:
 
 -f HOSTS, --fetch=HOSTS
   Pull/push-repos on these hosts will be checked if they are in sync. Argument
-  is a comma seperated list of the hosts. Hosts can be IPv4-addresses or
-  domains. Windows driveletters (e.g. 'c:') and 1st level folder in the root
+  is a comma separated list of the hosts. Hosts can be IPv4-addresses or
+  domains. Windows volume letters (e.g. 'c:') and 1st level folder in the root
   directory (e.g. '/home') in Linux systems are possible too. Alias can be
   configured in '.dvcsview.conf'.
 
@@ -46,6 +46,9 @@ def main(argv):
             if options.fetch == opt:
                 options.fetch = config.get(FETCH, opt)
 
+    # split comma separated list and strip elements
+    options.fetch = [h.strip() for h in options.fetch.split(',')]
+    
     repos = []
     workspaces = getWorkspaces(config)
     for workspace in workspaces:
@@ -178,7 +181,7 @@ class Git(Repo):
         remotes = []
         for r in remotesections:
             m = self.re.search(self.config.get(r, "url"))
-            if m.group(0) in self.options.fetch.split(","):
+            if m.group(0) in self.options.fetch:
                 remotes.append(r[8:-1])
         return remotes
 
@@ -240,7 +243,7 @@ class Hg(Repo):
         self.inout = []
         for p in paths:
             m = self.re.search(self.config.get("paths", p[0]))
-            if m.group(0) in self.options.fetch.split(","):
+            if m.group(0) in self.options.fetch:
                 line = self.traffic(p[1])
                 if line is not None:
                     self.inout.append(line)
