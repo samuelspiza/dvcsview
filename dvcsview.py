@@ -56,6 +56,8 @@ def main(argv):
         findRepos(workspace, repos, options)
     for repo in repos:
         print repo.statusstring
+    
+    return 0
 
 def getOptions(argv):
     parser = optparse.OptionParser()
@@ -138,28 +140,33 @@ class Repo:
                     line = re.sub(rep[0], rep[1], line)
                 a = False
                 for i in range(len(count)):
-                    b = line.startswith(count[i][0])
-                    if b:
-                        count[i][1] = count[i][1] + 1
-                    a = a or b
+                    m = re.search(count[i][0][0], line)
+                    if m is not None:
+                        count[i][1] += 1
+                        a = True
                 if not a:
                     mod.append(line)
         for c in count:
             if 0 < c[1]:
-                c[0] = c[0].replace("#", "").lstrip()
                 if 1 == c[1]:
-                    mod[0:0] = ["# %s: 1 file" % c[0]]
+                    mod[0:0] = ["# %s: 1 file" % c[0][1]]
                 else:
-                    mod[0:0] = ["# %s: %s files" % (c[0], c[1])]
+                    mod[0:0] = ["# %s: %s files" % (c[0][1], c[1])]
         return mod
 
 class Git(Repo):
     typ = "Git"
     configFile = ".git/config"
-    count = ["#\t%s" % s for s in ["modified", "deleted", "renamed"]]
+    count = []
+    count.append(["^#\t(?![a-z ]*:)","untracked"])
+    count.append(["^#\tdeleted:", "deleted"])
+    count.append(["^#\trenamed:", "renamed"])
+    count.append(["^#\tmodified:", "modified"])
+    count.append(["^#\tnew file:", "new file"])
     replace = [("Your branch is ahead of '\w*/\w*' by ([0-9]* commits?).",
-                "ahead: \g<1>")]
-    skip = ["# Changed but not updated:"]
+                "ahead: \g<1>"),
+               ("Changes to be committed:", "Changes to be committed")]
+    skip = ["# Changed but not updated:", "# Untracked files:"]
 
     def __init__(self, path, options):
         self.trackingbranches = None
@@ -209,7 +216,7 @@ class Git(Repo):
         for b in self.trackingbranches.items():
             if b[0] != status[0][12:]:
                 call("git checkout %s" % b[0], shell=True)
-                status = self.gitStatus()
+                status = self.getStatus()
         if status[0][12:] != defaultbranch:
             call("git checkout %s" % defaultbranch, shell=True)
 
@@ -228,7 +235,7 @@ class Git(Repo):
 class Hg(Repo):
     typ = "Hg "
     configFile = ".hg/hgrc"
-    count = ["?", "M"]
+    count = [("^?", "?"), ("^M", "M")]
     replace = []
     skip = []
 
@@ -265,4 +272,4 @@ class Hg(Repo):
         return Repo.getWarnings(self, status) + self.inout
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    sys.exit(main(sys.argv[1:]))
