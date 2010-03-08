@@ -102,7 +102,7 @@ class Repo:
         self.config = self.getConfig()
         ipseg = "[12]?[0-9]{1,2}"
         ip = "(?<=@)(?:" + ipseg + "\.){3}" + ipseg + "(?=[:/])"
-        url = "(?<=/|@)[a-z0-9-]*\.(?:com|de|net|org)(?=[:/])"
+        url = "(?<=[/@\.])[a-z0-9-]*\.(?:com|de|net|org)(?=[:/])"
         d = "^(?:/[a-z]+(?=/)|[a-z]:)"
         regexp = "|".join([ip, url, d])
         self.re = re.compile(regexp)
