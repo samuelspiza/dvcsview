@@ -32,6 +32,7 @@ from subprocess import call, Popen, PIPE
 
 CONFIGFILES = [os.path.expanduser("~/.dvcsview.conf"), ".dvcsview.conf"]
 WORKSPACES = "workspaces"
+REPOS = "repos"
 FETCH = "fetch"
 
 def main(argv):
@@ -50,10 +51,17 @@ def main(argv):
     options.fetch = [h.strip() for h in options.fetch.split(',')]
 
     repos = []
+
     workspaces = getWorkspaces(config)
     for workspace in workspaces:
         # creates 'Git' or 'Hg' objects and appends them to 'repos'
         findRepos(workspace, repos, options)
+
+    singlerepos = config.items(REPOS)
+    for path in singlerepos:
+        # creates 'Git' or 'Hg' objects and appends them to 'repos'
+        addSingleRepo(path[1], repos, options)
+
     for repo in repos:
         print repo.statusstring
 
@@ -76,16 +84,31 @@ def getWorkspaces(config):
     return workspaces
 
 def findRepos(path, repos, options):
-    entries = os.listdir(path)
+    entries = addRepo(path, repos, options)
     for entry in entries:
-        if entry == ".git":
-            repos.append(Git(path, options))
-        elif entry == ".hg":
-            repos.append(Hg(path, options))
-        else:
-            newpath = os.path.join(path, entry)
-            if os.path.isdir(newpath):
-                findRepos(newpath, repos, options)
+        newpath = os.path.join(path, entry)
+        if os.path.isdir(newpath):
+            findRepos(newpath, repos, options)
+
+def addSingleRepo(path, repos, options):
+    if not os.path.exists(path):
+        print "ERROR: Repository '%s' does not exist.\n" % r
+        return
+    for repo in repos:
+        if path == repo.path:
+            print "ERROR: Repository '%s' is in a workspace.\n" % r
+            return
+    addRepo(path, repos, options)
+
+def addRepo(path, repos, options):
+    entries = os.listdir(path)
+    if ".git" in entries:
+        repos.append(Git(path, options))
+        entries.remove(".git")
+    elif ".hg" in entries:
+        repos.append(Hg(path, options))
+        entries.remove(".hg")
+    return entries
 
 class WrappedFile:
     def __init__(self, path):
