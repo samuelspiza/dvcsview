@@ -3,9 +3,9 @@
 """
 dvcsview - prints status summary for DVCS repositories
 
-This tool helps to get an overview of the status of Git and Mercurial 
+This tool helps to get an overview of the status of Git and Mercurial
 repositories. The script searches for all repos in your workspaces and prints
-a short status overview. It checks for uncommited changes in the working 
+a short status overview. It checks for uncommited changes in the working
 directory and if configured pull/push-repos are in sync.
 
 Dvcsview is hosted on Github. Checkout:
@@ -48,7 +48,7 @@ def main(argv):
 
     # split comma separated list and strip elements
     options.fetch = [h.strip() for h in options.fetch.split(',')]
-    
+
     repos = []
     workspaces = getWorkspaces(config)
     for workspace in workspaces:
@@ -56,7 +56,7 @@ def main(argv):
         findRepos(workspace, repos, options)
     for repo in repos:
         print repo.statusstring
-    
+
     return 0
 
 def getOptions(argv):
@@ -71,7 +71,7 @@ def getWorkspaces(config):
     workspaces = [os.path.expanduser(w[1]) for w in config.items(WORKSPACES)]
     for w in workspaces[:]:
         if not os.path.exists(w):
-            print "ERROR: Workspace '" + w + "' does not exist.\n"
+            print "ERROR: Workspace '%s' does not exist.\n" % w
             workspaces.remove(w)
     return workspaces
 
