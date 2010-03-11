@@ -92,11 +92,11 @@ def findRepos(path, repos, options):
 
 def addSingleRepo(path, repos, options):
     if not os.path.exists(path):
-        print "ERROR: Repository '%s' does not exist.\n" % r
+        print "ERROR: Repository '%s' does not exist.\n" % path
         return
     for repo in repos:
         if path == repo.path:
-            print "ERROR: Repository '%s' is in a workspace.\n" % r
+            print "ERROR: Repository '%s' is in a workspace.\n" % path
             return
     addRepo(path, repos, options)
 
