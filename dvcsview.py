@@ -235,7 +235,7 @@ class Git(Repo):
 class Hg(Repo):
     typ = "Hg "
     configFile = ".hg/hgrc"
-    count = [("^?", "?"), ("^M", "M")]
+    count = [("^\?", "?"), ("^M", "M")]
     replace = []
     skip = []
 
