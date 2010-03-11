@@ -21,7 +21,7 @@ Options:
   configured in '.dvcsview.conf'.
 
 -q, --quiet
-  Only one line pro repo.
+  Only one line per repository.
 
 A template for the '.dvcsview.conf' can be found under:
 http://gist.github.com/258034
