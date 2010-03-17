@@ -76,15 +76,17 @@ def main(argv):
 
     repos = []
 
-    workspaces = getWorkspaces(config)
-    for workspace in workspaces:
-        # creates 'Git' or 'Hg' objects and appends them to 'repos'
-        findRepos(workspace, repos, options)
+    if config.has_section(WORKSPACES):
+        workspaces = getWorkspaces(config)
+        for workspace in workspaces:
+            # creates 'Git' or 'Hg' objects and appends them to 'repos'
+            findRepos(workspace, repos, options)
 
-    singlerepos = config.items(REPOS)
-    for path in singlerepos:
-        # creates 'Git' or 'Hg' objects and appends them to 'repos'
-        addSingleRepo(path[1], repos, options)
+    if config.has_section(REPOS):
+        singlerepos = config.items(REPOS)
+        for path in singlerepos:
+            # creates 'Git' or 'Hg' objects and appends them to 'repos'
+            addSingleRepo(path[1], repos, options)
 
     for repo in repos:
         print repo.statusstring
