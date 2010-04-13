@@ -32,26 +32,21 @@ repositories. The script searches for all repos in your workspaces and prints
 a short status overview. It checks for uncommited changes in the working
 directory and if configured pull/push-repos are in sync.
 
-Dvcsview is hosted on Github. Checkout:
-http://github.com/samuelspiza/dvcsview
+[Dvcsview](http://github.com/samuelspiza/dvcsview) is hosted on Github.
 
-Options:
-
--f HOSTS, --fetch=HOSTS
-  Pull/push-repos on these hosts will be checked if they are in sync. Argument
-  is a comma separated list of the hosts. Hosts can be IPv4-addresses or
-  domains. Windows volume letters (e.g. 'c:') and 1st level folder in the root
-  directory (e.g. '/home') in Linux systems are possible too. Alias can be
-  configured in '.dvcsview.conf'.
-
--q, --quiet
-  Only one line per repository.
-
-A template for the '.dvcsview.conf' can be found under:
-http://gist.github.com/258034
+The [template](http://gist.github.com/258034) contains examples for the
+configuration of Dvcsview.
 """
 
-import sys, os, ConfigParser, optparse, re
+__author__ = "Samuel Spiza <sam.spiza@gmail.com>"
+__license__ = "Public Domain"
+__version__ = "0.1"
+
+import sys
+import os
+import re
+import ConfigParser
+import optparse
 from subprocess import call, Popen, PIPE
 
 CONFIG_FILES = [os.path.expanduser("~/.dvcsview.conf"), ".dvcsview.conf"]
@@ -96,9 +91,17 @@ def main(argv):
 def getOptions(argv):
     parser = optparse.OptionParser()
     parser.add_option("-f", "--fetch",
-                      dest="fetch", metavar="HOSTS", default="")
+                      dest="fetch", metavar="HOSTS", default="",
+                      help="Pull/push-repos on these hosts will be checked if "
+                           "they are in sync. Argument is a comma separated "
+                           "list of the hosts. Hosts can be IPv4-addresses or "
+                           "domains. Windows volume letters (e.g. 'c:') and "
+                           "1st level folder in the root directory "
+                           "(e.g. '/home') in Linux systems are possible too. "
+                           "Alias can be configured in '.dvcsview.conf'.")
     parser.add_option("-q", "--quiet",
-                      action="store_true", dest="quiet", default=False)
+                      dest="quiet", action="store_true", default=False,
+                      help="Only one line per repository.")
     return parser.parse_args(argv)[0]
 
 def getWorkspaces(config):
