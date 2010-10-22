@@ -1,5 +1,6 @@
 *~
 *.pyc
 /.settings/
+/src/.dvcsview.conf
 /.project
 /.pydevproject

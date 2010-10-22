@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 #
 # This is free and unencumbered software released into the public domain.
 # 
@@ -25,7 +26,7 @@
 # 
 # For more information, please refer to <http://unlicense.org/>
 #
-"""dvcsview - prints status summary for DVCS repositories
+"""dvcsview
 
 This tool helps to get an overview of the status of Git and Mercurial
 repositories. The script searches for all repos in your workspaces and prints
@@ -39,54 +40,19 @@ configuration of Dvcsview.
 """
 
 __author__ = "Samuel Spiza <sam.spiza@gmail.com>"
-__license__ = "Public Domain"
-__version__ = "0.1"
+__version__ = "0.1a"
 
-import sys
-import os
 import re
+import os
 import ConfigParser
 import optparse
 from subprocess import call, Popen, PIPE
+import sys
 
 CONFIG_FILES = [os.path.expanduser("~/.dvcsview.conf"), ".dvcsview.conf"]
 WORKSPACES = "workspaces"
 REPOS = "repos"
 FETCH = "fetch"
-
-def main(argv):
-    config = ConfigParser.ConfigParser()
-    config.read(CONFIG_FILES)
-
-    options = getOptions(argv)
-
-    # replace fetch alias with configured hosts
-    if config.has_section(FETCH):
-        for opt in config.options(FETCH):
-            if options.fetch == opt:
-                options.fetch = config.get(FETCH, opt)
-
-    # split comma separated list and strip elements
-    options.fetch = [h.strip() for h in options.fetch.split(',')]
-
-    repos = []
-
-    if config.has_section(WORKSPACES):
-        workspaces = getWorkspaces(config)
-        for workspace in workspaces:
-            # creates 'Git' or 'Hg' objects and appends them to 'repos'
-            findRepos(workspace, repos, options)
-
-    if config.has_section(REPOS):
-        singlerepos = config.items(REPOS)
-        for path in singlerepos:
-            # creates 'Git' or 'Hg' objects and appends them to 'repos'
-            addSingleRepo(path[1], repos, options)
-
-    for repo in repos:
-        print repo.statusstring
-
-    return 0
 
 def getOptions(argv):
     parser = optparse.OptionParser()
@@ -322,6 +288,40 @@ class Hg(Repo):
 
     def getWarnings(self, status):
         return Repo.getWarnings(self, status) + self.inout
+
+def main(argv):
+    config = ConfigParser.ConfigParser()
+    config.read(CONFIG_FILES)
+
+    options = getOptions(argv)
+
+    # replace fetch alias with configured hosts
+    if config.has_section(FETCH):
+        for opt in config.options(FETCH):
+            if options.fetch == opt:
+                options.fetch = config.get(FETCH, opt)
+
+    # split comma separated list and strip elements
+    options.fetch = [h.strip() for h in options.fetch.split(',')]
+
+    repos = []
+
+    if config.has_section(WORKSPACES):
+        workspaces = getWorkspaces(config)
+        for workspace in workspaces:
+            # creates 'Git' or 'Hg' objects and appends them to 'repos'
+            findRepos(workspace, repos, options)
+
+    if config.has_section(REPOS):
+        singlerepos = config.items(REPOS)
+        for path in singlerepos:
+            # creates 'Git' or 'Hg' objects and appends them to 'repos'
+            addSingleRepo(path[1], repos, options)
+
+    for repo in repos:
+        print repo.statusstring
+
+    return 0
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
