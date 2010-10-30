@@ -40,7 +40,7 @@ configuration of DVCS View.
 """
 
 __author__ = "Samuel Spiza <sam.spiza@gmail.com>"
-__version__ = "0.1a"
+__version__ = "0.2"
 
 import re
 import os
@@ -49,15 +49,16 @@ import optparse
 from subprocess import call, Popen, PIPE
 import sys
 
-CONFIG_FILES = [os.path.expanduser("~/.dvcsview.conf"), ".dvcsview.conf"]
+CONFIG_FILENAMES = [os.path.expanduser("~/.dvcsview.conf"), ".dvcsview.conf"]
+SETTINGS = "settings"
 WORKSPACES = "workspaces"
 REPOS = "repos"
-FETCH = "fetch"
+ALIAS = "alias"
 
 def getOptions(argv):
     parser = optparse.OptionParser()
-    parser.add_option("-f", "--fetch",
-                      dest="fetch", metavar="HOSTS", default="",
+    parser.add_option("-t", "--targets",
+                      dest="targets", metavar="HOSTS", default="",
                       help="Pull/push-repos on these hosts will be checked if "
                            "they are in sync. Argument is a comma separated "
                            "list of the hosts. Hosts can be IPv4-addresses or "
@@ -78,14 +79,14 @@ def getWorkspaces(config):
             workspaces.remove(w)
     return workspaces
 
-def findRepos(path, repos, options):
-    entries = addRepo(path, repos, options)
+def findRepos(path, repos, targets=[], skip=[], quiet=False):
+    entries = addRepo(path, repos, targets=targets, skip=skip, quiet=quiet)
     for entry in entries:
         newpath = os.path.join(path, entry)
         if os.path.isdir(newpath):
-            findRepos(newpath, repos, options)
+            findRepos(newpath, repos, targets=targets, skip=skip, quiet=quiet)
 
-def addSingleRepo(path, repos, options):
+def addSingleRepo(path, repos, targets=[], skip=[], quiet=False):
     if not os.path.exists(path):
         print "ERROR: Repository '%s' does not exist.\n" % path
         return
@@ -93,15 +94,15 @@ def addSingleRepo(path, repos, options):
         if path == repo.path:
             print "ERROR: Repository '%s' is in a workspace.\n" % path
             return
-    addRepo(path, repos, options)
+    addRepo(path, repos, targets=targets, skip=skip, quiet=quiet)
 
-def addRepo(path, repos, options):
+def addRepo(path, repos, targets=[], skip=[], quiet=False):
     entries = os.listdir(path)
-    if ".git" in entries:
-        repos.append(Git(path, options))
+    if ".git" in entries and not "git" in skip:
+        repos.append(Git(path, targets=targets, quiet=quiet))
         entries.remove(".git")
-    elif ".hg" in entries:
-        repos.append(Hg(path, options))
+    elif ".hg" in entries and not "hg" in skip:
+        repos.append(Hg(path, targets=targets, quiet=quiet))
         entries.remove(".hg")
     return entries
 
@@ -113,10 +114,11 @@ class WrappedFile:
         return self.file.readline().lstrip()
 
 class Repo:
-    def __init__(self, path, options):
+    def __init__(self, path, targets=[], quiet=False):
         self.path = path
         os.chdir(self.path)
-        self.options = options
+        self.targets = targets
+        self.quiet = quiet
         self.config = self.getConfig()
         ipseg = "[12]?[0-9]{1,2}"
         ip = "(?<=@)(?:" + ipseg + "\.){3}" + ipseg + "(?=[:/])"
@@ -141,7 +143,7 @@ class Repo:
         else:
             isClean = "NOT CLEAN"
         text = self.path
-        if not self.options.quiet:
+        if not self.quiet:
             text = "\n  ".join([text] + self.getWarnings(status))
         return "%s %s %s" % (isClean, self.typ, text)
 
@@ -186,9 +188,9 @@ class Git(Repo):
                ("Changes to be committed:", "Changes to be committed")]
     skip = ["# Changed but not updated:", "# Untracked files:"]
 
-    def __init__(self, path, options):
+    def __init__(self, path, targets=[], quiet=False):
         self.trackingbranches = None
-        Repo.__init__(self, path, options)
+        Repo.__init__(self, path, targets=targets, quiet=quiet)
 
     def getConfig(self):
         config = ConfigParser.ConfigParser()
@@ -206,7 +208,7 @@ class Git(Repo):
         remotes = []
         for r in remotesections:
             m = self.re.search(self.config.get(r, "url"))
-            if m.group(0) in self.options.fetch:
+            if m.group(0) in self.targets:
                 remotes.append(r[8:-1])
         return remotes
 
@@ -268,7 +270,7 @@ class Hg(Repo):
         self.inout = []
         for p in paths:
             m = self.re.search(self.config.get("paths", p[0]))
-            if m.group(0) in self.options.fetch:
+            if m.group(0) in self.targets:
                 line = self.traffic(p[1])
                 if line is not None:
                     self.inout.append(line)
@@ -291,18 +293,25 @@ class Hg(Repo):
 
 def main(argv):
     config = ConfigParser.ConfigParser()
-    config.read(CONFIG_FILES)
+    config.read(CONFIG_FILENAMES)
 
     options = getOptions(argv)
 
+    targets = options.targets
     # replace fetch alias with configured hosts
-    if config.has_section(FETCH):
-        for opt in config.options(FETCH):
-            if options.fetch == opt:
-                options.fetch = config.get(FETCH, opt)
-
+    if config.has_section(ALIAS):
+        for opt in config.options(ALIAS):
+            if targets == opt:
+                targets = config.get(ALIAS, opt)
     # split comma separated list and strip elements
-    options.fetch = [h.strip() for h in options.fetch.split(',')]
+    targets = [t.strip() for t in targets.split(',') if 0 < len(t.strip())]
+
+    # Parse the VCSs that shall be skipped.
+    skip = []
+    if config.has_section(SETTINGS):
+        for opt in config.options(SETTINGS):
+            if opt.startswith("skip.") and config.getboolean(SETTINGS, opt):
+                skip.append(opt[5:])
 
     repos = []
 
@@ -310,13 +319,15 @@ def main(argv):
         workspaces = getWorkspaces(config)
         for workspace in workspaces:
             # creates 'Git' or 'Hg' objects and appends them to 'repos'
-            findRepos(workspace, repos, options)
+            findRepos(workspace, repos, targets=targets, skip=skip,
+                      quiet=options.quiet)
 
     if config.has_section(REPOS):
         singlerepos = config.items(REPOS)
         for path in singlerepos:
             # creates 'Git' or 'Hg' objects and appends them to 'repos'
-            addSingleRepo(path[1], repos, options)
+            addSingleRepo(path[1], repos, targets=targets, skip=skip,
+                          quiet=options.quiet)
 
     for repo in repos:
         print repo.statusstring
