@@ -49,7 +49,8 @@ import optparse
 from subprocess import call, Popen, PIPE
 import sys
 
-CONFIG_FILENAMES = [os.path.expanduser("~/.dvcsview.conf"), ".dvcsview.conf"]
+CONFIG_FILENAMES = [os.path.expanduser("~/.dvcsview.conf"), "dvcsview.conf",
+                    os.path.expanduser("~/dvcsview.ini"), "dvcsview.ini"]
 SETTINGS = "settings"
 WORKSPACES = "workspaces"
 REPOS = "repos"
