@@ -40,7 +40,7 @@ configuration of DVCS View.
 """
 
 __author__ = "Samuel Spiza <sam.spiza@gmail.com>"
-__version__ = "0.2.1"
+__version__ = "0.2.1a"
 
 import re
 import os
@@ -73,41 +73,56 @@ def getOptions(argv):
     return parser.parse_args(argv)[0]
 
 def getWorkspaces(config):
+    """Returns all existing workspaces from the config."""
     workspaces = [os.path.expanduser(w[1]) for w in config.items(WORKSPACES)]
     for w in workspaces[:]:
         if not os.path.exists(w):
-            print "ERROR: Workspace '%s' does not exist.\n" % w
+            print "WARNING: Workspace '%s' does not exist.\n" % w
             workspaces.remove(w)
     return workspaces
 
-def findRepos(path, repos, targets=[], skip=[], quiet=False):
-    entries = addRepo(path, repos, targets=targets, skip=skip, quiet=quiet)
+def findRepos(path, repos, targets=[], skip=[]):
+    """Populates 'repos' recursively.
+    
+    Calls itself for all directories of the dirlist reduced by 'addRepo'.
+    """
+    entries = addRepo(path, repos, targets=targets, skip=skip)
     for entry in entries:
         newpath = os.path.join(path, entry)
         if os.path.isdir(newpath):
-            findRepos(newpath, repos, targets=targets, skip=skip, quiet=quiet)
+            findRepos(newpath, repos, targets=targets, skip=skip)
 
-def addSingleRepo(path, repos, targets=[], skip=[], quiet=False):
+def addSingleRepo(path, repos, targets=[], skip=[]):
+    """Instanciates a subclass of 'Repo' if 'path' is a repository."""
     if not os.path.exists(path):
-        print "ERROR: Repository '%s' does not exist.\n" % path
+        print "WARNING: Repository '%s' does not exist.\n" % path
         return
+    # Check if the repository was already found while walking throug the
+    # workspaces.
     for repo in repos:
         if path == repo.path:
-            print "ERROR: Repository '%s' is in a workspace.\n" % path
+            print "INFO: Repository '%s' is in a workspace.\n" % path
             return
-    addRepo(path, repos, targets=targets, skip=skip, quiet=quiet)
+    addRepo(path, repos, targets=targets, skip=skip)
 
-def addRepo(path, repos, targets=[], skip=[], quiet=False):
+def addRepo(path, repos, targets=[], skip=[]):
+    """Checks if 'path' is a repo and creates Repo objects.
+    
+    If path contains one of the DVCS specific hidden repository directories,
+    the corresponding subclass of Repo will be instanciated. This object is
+    appended to 'repos'. Returns the dirlist of 'path' without this directory.
+    """
     entries = os.listdir(path)
     if ".git" in entries and not "git" in skip:
-        repos.append(Git(path, targets=targets, quiet=quiet))
+        repos.append(Git(path, targets=targets))
         entries.remove(".git")
     elif ".hg" in entries and not "hg" in skip:
-        repos.append(Hg(path, targets=targets, quiet=quiet))
+        repos.append(Hg(path, targets=targets))
         entries.remove(".hg")
     return entries
 
 class WrappedFile:
+    """File object that returns all lines striped on the left."""
     def __init__(self, path):
         self.file = open(path, "r")
 
@@ -115,11 +130,10 @@ class WrappedFile:
         return self.file.readline().lstrip()
 
 class Repo:
-    def __init__(self, path, targets=[], quiet=False):
+    def __init__(self, path, targets=[]):
         self.path = path
         os.chdir(self.path)
         self.targets = targets
-        self.quiet = quiet
         self.config = self.getConfig()
         ipseg = "[12]?[0-9]{1,2}"
         ip = "(?<=@)(?:" + ipseg + "\.){3}" + ipseg + "(?=[:/])"
@@ -128,7 +142,12 @@ class Repo:
         regexp = "|".join([ip, url, d])
         self.re = re.compile(regexp)
         self.fetch()
-        self.statusstring = self.buildStatusString()
+        self.status = None
+        self.statusString = None
+        self.warningsString = None
+        # Must be called (now) because getStatus doesn't change the current
+        # working directory.
+        self.getStatus()
 
     def getConfig(self):
         config = None
@@ -143,17 +162,6 @@ class Repo:
             if m is not None and m.group(0) in self.targets:
                 print "fetch %s (%s)" % (r['url'], r['comment'])
                 self.fetchRemote(r)
-
-    def buildStatusString(self):
-        status = self.getStatus()
-        if self.isClean(status):
-            isClean = "CLEAN    "
-        else:
-            isClean = "NOT CLEAN"
-        text = self.path
-        if not self.quiet:
-            text = "\n  ".join([text] + self.getWarnings(status))
-        return "%s %s %s" % (isClean, self.typ, text)
 
     def pipe(self, command):
         pipe = Popen(command, shell=True, stdout=PIPE).stdout
@@ -182,6 +190,20 @@ class Repo:
                     mod[0:0] = ["# %s: %s files" % (c[0][1], c[1])]
         return mod
 
+    def getStatusString(self):
+        if self.statusString is None:
+            if self.isClean():
+                isClean = "CLEAN    "
+            else:
+                isClean = "NOT CLEAN"
+            self.statusString = "%s %s %s" % (isClean, self.typ, self.path)
+        return self.statusString
+
+    def getWarningsString(self):
+        if self.warningsString is None:
+            self.warningsString = "\n  ".join(self.getWarnings())
+        return self.warningsString
+
 class Git(Repo):
     typ = "Git"
     configFile = ".git/config"
@@ -196,9 +218,9 @@ class Git(Repo):
                ("Changes to be committed:", "Changes to be committed")]
     skip = ["# Changed but not updated:", "# Untracked files:"]
 
-    def __init__(self, path, targets=[], quiet=False):
+    def __init__(self, path, targets=[]):
         self.trackingbranches = None
-        Repo.__init__(self, path, targets=targets, quiet=quiet)
+        Repo.__init__(self, path, targets=targets)
 
     def getConfig(self):
         config = ConfigParser.ConfigParser()
@@ -219,6 +241,11 @@ class Git(Repo):
         return remotes
 
     def getStatus(self):
+        if self.status is None:
+            self.status = self.buildStatus()
+        return self.status
+
+    def buildStatus(self):
         if self.trackingbranches is None:
             self.trackingbranches = self.getTrackingBranches()
         status = self.pipe("git status")
@@ -231,13 +258,14 @@ class Git(Repo):
         return dict([(b[8:-1], None) for b in branches
                      if self.config.has_option(b, "merge")])
 
-    def isClean(self, status):
-        b = status[-1][:17] == "nothing to commit"
+    def isClean(self):
+        b = self.getStatus()[-1][:17] == "nothing to commit"
         if b:
-            self.allBranches(status)
+            self.allBranches()
         return b
 
-    def allBranches(self, status):
+    def allBranches(self):
+        status = self.getStatus()
         defaultbranch = status[0][12:]
         for b in self.trackingbranches.items():
             if b[0] != status[0][12:]:
@@ -246,7 +274,7 @@ class Git(Repo):
         if status[0][12:] != defaultbranch:
             call("git checkout %s" % defaultbranch, shell=True)
 
-    def getWarnings(self, status):
+    def getWarnings(self):
         warnings = []
         for status in self.trackingbranches.values():
             if status is not None:
@@ -265,9 +293,9 @@ class Hg(Repo):
     replace = []
     skip = []
 
-    def __init__(self, path, targets=[], quiet=False):
+    def __init__(self, path, targets=[]):
         self.inout = []
-        Repo.__init__(self, path, targets=targets, quiet=quiet)
+        Repo.__init__(self, path, targets=targets)
 
     def getRemotes(self):
         remotes = []
@@ -286,16 +314,18 @@ class Hg(Repo):
     def fetchRemote(self, r):
         s = len([l for l in self.pipe(r['cmd']) if l.startswith("changeset")])
         if 0 < s:
-            self.inout.append("# %s: %s changesets" % (cmd[3:], s))
+            self.inout.append("# %s: %s changesets" % (r['cmd'][3:], s))
 
     def getStatus(self):
-        return self.pipe("hg status")
+        if self.status is None:
+            self.status = self.pipe("hg status")
+        return self.status
 
-    def isClean(self, status):
-        return 0 == len(status)
+    def isClean(self):
+        return 0 == len(self.getStatus())
 
-    def getWarnings(self, status):
-        return Repo.getWarnings(self, status) + self.inout
+    def getWarnings(self):
+        return Repo.getWarnings(self, self.getStatus()) + self.inout
 
 def main(argv):
     config = ConfigParser.ConfigParser()
@@ -324,19 +354,19 @@ def main(argv):
     if config.has_section(WORKSPACES):
         workspaces = getWorkspaces(config)
         for workspace in workspaces:
-            # creates 'Git' or 'Hg' objects and appends them to 'repos'
-            findRepos(workspace, repos, targets=targets, skip=skip,
-                      quiet=options.quiet)
+            findRepos(workspace, repos, targets=targets, skip=skip)
 
     if config.has_section(REPOS):
         singlerepos = config.items(REPOS)
         for path in singlerepos:
-            # creates 'Git' or 'Hg' objects and appends them to 'repos'
-            addSingleRepo(path[1], repos, targets=targets, skip=skip,
-                          quiet=options.quiet)
+            addSingleRepo(path[1], repos, targets=targets, skip=skip)
 
     for repo in repos:
-        print repo.statusstring
+        print repo.getStatusString()
+        if not options.quiet:
+            warningsString = repo.getWarningsString()
+            if 0 < len(warningsString):
+                print warningsString
 
     return 0
 
