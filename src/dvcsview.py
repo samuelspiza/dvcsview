@@ -40,7 +40,7 @@ configuration of DVCS View.
 """
 
 __author__ = "Samuel Spiza <sam.spiza@gmail.com>"
-__version__ = "0.2"
+__version__ = "0.2.1"
 
 import re
 import os
@@ -137,6 +137,13 @@ class Repo:
             config.readfp(open(self.configFile))
         return config
 
+    def fetch(self):
+        for r in self.getRemotes():
+            m = self.re.search(r['url'])
+            if m is not None and m.group(0) in self.targets:
+                print "fetch %s (%s)" % (r['url'], r['comment'])
+                self.fetchRemote(r)
+
     def buildStatusString(self):
         status = self.getStatus()
         if self.isClean(status):
@@ -198,19 +205,17 @@ class Git(Repo):
         config.readfp(WrappedFile(self.configFile))
         return config
 
-    def fetch(self):
-        for remote in self.getRemotes():
-            print "fetch %s" % self.path
-            call("git fetch %s" % remote, shell=True)
+    def fetchRemote(self, r):
+        call(r['cmd'], shell=True)
 
     def getRemotes(self):
         remotesections = [s for s in self.config.sections()
                           if s.startswith("remote")]
         remotes = []
         for r in remotesections:
-            m = self.re.search(self.config.get(r, "url"))
-            if m.group(0) in self.targets:
-                remotes.append(r[8:-1])
+            remotes.append({'cmd': "git fetch " + r[8:-1],
+                            'url': self.config.get(r, "url"),
+                            'comment': r[8:-1]})
         return remotes
 
     def getStatus(self):
@@ -260,28 +265,28 @@ class Hg(Repo):
     replace = []
     skip = []
 
-    def fetch(self):
-        paths = []
-        if self.config is not None and self.config.has_option("paths", 'default'):
-            paths.append(('default', "hg incoming"))
-            if self.config.has_option("paths", 'default-push'):
-                paths.append(('default-push', "hg outgoing"))
-            else:
-                paths.append(('default', "hg outgoing"))
+    def __init__(self, path, targets=[], quiet=False):
         self.inout = []
-        for p in paths:
-            m = self.re.search(self.config.get("paths", p[0]))
-            if m.group(0) in self.targets:
-                line = self.traffic(p[1])
-                if line is not None:
-                    self.inout.append(line)
+        Repo.__init__(self, path, targets=targets, quiet=quiet)
 
-    def traffic(self, cmd):
-        s = len([l for l in self.pipe(cmd) if l.startswith("changeset")])
+    def getRemotes(self):
+        remotes = []
+        if self.config is not None and self.config.has_option("paths", 'default'):
+            default = self.config.get("paths", "default")
+            remotes.extend([{'cmd': "hg incoming",
+                             'url': default,
+                             'comment': "incoming"},
+                            {'cmd': "hg outgoing",
+                             'url': default,
+                             'comment': "outgoing"}])
+            if self.config.has_option("paths", 'default-push'):
+                remotes[1]['url'] = self.config.get("paths", "default-push")
+        return remotes
+
+    def fetchRemote(self, r):
+        s = len([l for l in self.pipe(r['cmd']) if l.startswith("changeset")])
         if 0 < s:
-            return "# %s: %s changesets" % (cmd[3:], s)
-        else:
-            return None
+            self.inout.append("# %s: %s changesets" % (cmd[3:], s))
 
     def getStatus(self):
         return self.pipe("hg status")
