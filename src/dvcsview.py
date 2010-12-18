@@ -40,7 +40,7 @@ configuration of DVCS View.
 """
 
 __author__ = "Samuel Spiza <sam.spiza@gmail.com>"
-__version__ = "0.2.1a"
+__version__ = "0.2.2"
 
 import re
 import os
@@ -54,7 +54,6 @@ CONFIG_FILENAMES = [os.path.expanduser("~/.dvcsview.conf"), "dvcsview.conf",
 SETTINGS = "settings"
 WORKSPACES = "workspaces"
 REPOS = "repos"
-ALIAS = "alias"
 
 def getOptions(argv):
     parser = optparse.OptionParser()
@@ -159,7 +158,7 @@ class Repo:
     def fetch(self):
         for r in self.getRemotes():
             m = self.re.search(r['url'])
-            if m is not None and m.group(0) in self.targets:
+            if m is not None and self.targets.check(m.group(0)):
                 print "fetch %s (%s)" % (r['url'], r['comment'])
                 self.fetchRemote(r)
 
@@ -327,20 +326,94 @@ class Hg(Repo):
     def getWarnings(self):
         return Repo.getWarnings(self, self.getStatus()) + self.inout
 
+class Targets:
+    SEP = ","
+    SECTION = "alias"
+
+    def __init__(self, list):
+        self.list = list
+        self.read()
+        self.readAlias()
+        self.resolvedList = self.resolveList(self.list)
+
+    def read(self):
+        config = ConfigParser.ConfigParser()
+        config.read(CONFIG_FILENAMES)
+        if not config.has_section(self.SECTION):
+            config.add_section(self.SECTION)
+        self.config = config
+
+    def readAlias(self):
+        ops = self.config.options(self.SECTION)
+        self.alias = dict([(o, self.config.get(self.SECTION, o)) for o in ops])
+
+    def resolveList(self, list):
+        list, alias = self._resolveList(list, dict(self.alias))
+        return [e for e in set(list)]
+
+    def _resolveList(self, list, alias):
+        ret = []
+        splited = [e.strip() for e in list.split(self.SEP)]
+        for e in splited:
+            if e in alias:
+                f = alias[e]
+                alias[e] = ""
+                e, alias = self._resolveList(f, alias)
+            else:
+                e = [e]
+            ret.extend([g for g in e if g != ""])
+        return ret, alias
+
+    def check(self, url):
+        if self.list == "":
+            return False
+        if self.isNew(url):
+            self.promtUser(url)
+        return self.isInList(url)
+
+    def isNew(self, url):
+        return not url in self.resolveList(self.SEP.join(self.alias.keys()))
+
+    def promtUser(self, url):
+        keys = self.alias.keys()
+        if 0 < len(keys):
+            print "Current alias:"
+            out = keys[0]
+            for alias in keys[1:]:
+                if 80 < len(out + ", " + alias):
+                    print out
+                    out = alias
+                else:
+                    out += ", " + alias
+            print out
+        addTo = raw_input("add '%s' to alias:\n" % url)
+        addToList = set([e.strip() for e in addTo.split(self.SEP)])
+        for alias in addToList:
+            if self.config.has_option(self.SECTION, alias):
+                self.config.set(self.SECTION, alias,
+                                self.config.get(self.SECTION, alias) + \
+                                self.SEP + url)
+            else:
+                self.config.set(self.SECTION, alias, url)
+        self.write()
+        self.readAlias()
+        self.resolvedList = self.resolveList(self.list)
+
+    def write(self):
+        for path in reversed(CONFIG_FILENAMES):
+            if os.path.exists(path):
+                self.config.write(open(path, 'w'))
+
+    def isInList(self, url):
+        return url in self.resolvedList
+
 def main(argv):
     config = ConfigParser.ConfigParser()
     config.read(CONFIG_FILENAMES)
 
     options = getOptions(argv)
 
-    targets = options.targets
-    # replace fetch alias with configured hosts
-    if config.has_section(ALIAS):
-        for opt in config.options(ALIAS):
-            if targets == opt:
-                targets = config.get(ALIAS, opt)
-    # split comma separated list and strip elements
-    targets = [t.strip() for t in targets.split(',') if 0 < len(t.strip())]
+    targets = Targets(options.targets)
 
     # Parse the VCSs that shall be skipped.
     skip = []
