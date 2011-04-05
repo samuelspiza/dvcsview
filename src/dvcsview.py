@@ -349,7 +349,7 @@ class Targets:
 
     def resolveList(self, list):
         list, alias = self._resolveList(list, dict(self.alias))
-        return [e for e in set(list)]
+        return list
 
     def _resolveList(self, list, alias):
         ret = []
@@ -361,7 +361,9 @@ class Targets:
                 e, alias = self._resolveList(f, alias)
             else:
                 e = [e]
-            ret.extend([g for g in e if g != ""])
+            for g in e:
+                if g != "" and not g in ret:
+                    ret.append(g)
         return ret, alias
 
     def check(self, url):
@@ -386,7 +388,8 @@ class Targets:
                 else:
                     out += ", " + alias
             print out
-        addTo = raw_input("add '%s' to alias:\n" % url)
+        out = "add '%s' to alias (list alias seperated by '%s'):\n"
+        addTo = raw_input(out % (url, self.SEP))
         addToList = set([e.strip() for e in addTo.split(self.SEP)])
         for alias in addToList:
             if self.config.has_option(self.SECTION, alias):
