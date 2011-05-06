@@ -399,7 +399,7 @@ class Targets:
                     out += ", " + alias
             print(out)
         out = "add '%s' to alias (list alias seperated by '%s'):\n"
-        addTo = raw_input(out % (url, self.SEP))
+        addTo = input(out % (url, self.SEP))
         addToList = set([e.strip() for e in addTo.split(self.SEP)])
         for alias in addToList:
             if self.config.has_option(self.SECTION, alias):
@@ -436,8 +436,6 @@ def main(argv):
     format = "%(levelname)-8s %(message)s"
     handler.setFormatter(logging.Formatter(format))
     logging.getLogger().addHandler(handler)
-
-    logger = logging.getLogger(DEFAULT_LOGGER)
 
     targets = Targets(options.targets)
 
