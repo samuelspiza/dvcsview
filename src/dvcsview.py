@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 #
 # This is free and unencumbered software released into the public domain.
 #
@@ -40,17 +39,23 @@ configuration of DVCS View.
 """
 
 __author__ = "Samuel Spiza <sam.spiza@gmail.com>"
-__version__ = "0.2.2"
+__version__ = "0.3"
 
 import re
 import os
-import ConfigParser
+import configparser
 import optparse
 from subprocess import call, Popen, PIPE
 import sys
+import logging
 
-CONFIG_FILENAMES = [os.path.expanduser("~/.dvcsview.conf"), "dvcsview.conf",
-                    os.path.expanduser("~/dvcsview.ini"), "dvcsview.ini"]
+CONFIG_FILENAMES = [os.path.expanduser("~/.dvcsview.conf"),
+                    os.path.dirname(os.path.abspath((__file__))) + \
+                    "dvcsview.conf",
+                    os.path.expanduser("~/dvcsview.ini"),
+                    os.path.dirname(os.path.abspath((__file__))) + \
+                    "dvcsview.ini"]
+DEFAULT_LOGGER = "dvcsview"
 SETTINGS = "settings"
 WORKSPACES = "workspaces"
 REPOS = "repos"
@@ -73,12 +78,15 @@ def getOptions(argv):
 
 def getWorkspaces(config):
     """Returns all existing workspaces from the config."""
-    workspaces = [os.path.expanduser(w[1]) for w in config.items(WORKSPACES)]
-    for w in workspaces[:]:
-        if not os.path.exists(w):
-            print "WARNING: Workspace '%s' does not exist.\n" % w
-            workspaces.remove(w)
-    return workspaces
+    logger = logging.getLogger(DEFAULT_LOGGER)
+    ret = []
+    for w in config.items(WORKSPACES):
+        workspace = os.path.expanduser(w[1])
+        if os.path.exists(workspace):
+            ret.append(workspace)
+        else:
+            logger.warning("Workspace '%s' does not exist." % workspace)
+    return ret
 
 def findRepos(path, repos, targets=[], skip=[]):
     """Populates 'repos' recursively.
@@ -93,14 +101,15 @@ def findRepos(path, repos, targets=[], skip=[]):
 
 def addSingleRepo(path, repos, targets=[], skip=[]):
     """Instanciates a subclass of 'Repo' if 'path' is a repository."""
+    logger = logging.getLogger(DEFAULT_LOGGER)
     if not os.path.exists(path):
-        print "WARNING: Repository '%s' does not exist.\n" % path
+        logger.warning("Repository '%s' does not exist." % path)
         return
     # Check if the repository was already found while walking throug the
     # workspaces.
     for repo in repos:
         if path == repo.path:
-            print "INFO: Repository '%s' is in a workspace.\n" % path
+            logger.info("Repository '%s' is in a workspace." % path)
             return
     addRepo(path, repos, targets=targets, skip=skip)
 
@@ -151,20 +160,21 @@ class Repo:
     def getConfig(self):
         config = None
         if os.path.exists(self.configFile):
-            config = ConfigParser.ConfigParser()
+            config = configparser.ConfigParser()
             config.readfp(open(self.configFile))
         return config
 
     def fetch(self):
+        logger = logging.getLogger(DEFAULT_LOGGER)
         for r in self.getRemotes():
             m = self.re.search(r['url'])
             if m is not None and self.targets.check(m.group(0)):
-                print "fetch %s (%s)" % (r['url'], r['comment'])
+                logger.info("fetch %s (%s)" % (r['url'], r['comment']))
                 self.fetchRemote(r)
 
     def pipe(self, command):
         pipe = Popen(command, shell=True, stdout=PIPE).stdout
-        return [l.strip() for l in pipe.readlines()]
+        return [l.decode().strip() for l in pipe.readlines()]
 
     def getWarnings(self, status):
         count = [[c, 0] for c in self.count]
@@ -222,7 +232,7 @@ class Git(Repo):
         Repo.__init__(self, path, targets=targets)
 
     def getConfig(self):
-        config = ConfigParser.ConfigParser()
+        config = configparser.ConfigParser()
         config.readfp(WrappedFile(self.configFile))
         return config
 
@@ -337,7 +347,7 @@ class Targets:
         self.resolvedList = self.resolveList(self.list)
 
     def read(self):
-        config = ConfigParser.ConfigParser()
+        config = configparser.ConfigParser()
         config.read(CONFIG_FILENAMES)
         if not config.has_section(self.SECTION):
             config.add_section(self.SECTION)
@@ -379,15 +389,15 @@ class Targets:
     def promtUser(self, url):
         keys = self.alias.keys()
         if 0 < len(keys):
-            print "Current alias:"
+            print("Current alias:")
             out = keys[0]
             for alias in keys[1:]:
                 if 80 < len(out + ", " + alias):
-                    print out
+                    print(out)
                     out = alias
                 else:
                     out += ", " + alias
-            print out
+            print(out)
         out = "add '%s' to alias (list alias seperated by '%s'):\n"
         addTo = raw_input(out % (url, self.SEP))
         addToList = set([e.strip() for e in addTo.split(self.SEP)])
@@ -411,10 +421,23 @@ class Targets:
         return url in self.resolvedList
 
 def main(argv):
-    config = ConfigParser.ConfigParser()
+    config = configparser.ConfigParser()
     config.read(CONFIG_FILENAMES)
 
     options = getOptions(argv)
+
+    # Configure the logging.
+    logging.getLogger().setLevel(logging.DEBUG)
+    handler = logging.StreamHandler()
+    if options.quiet:
+        handler.setLevel(logging.WARNING)
+    else:
+        handler.setLevel(logging.DEBUG)
+    format = "%(levelname)-8s %(message)s"
+    handler.setFormatter(logging.Formatter(format))
+    logging.getLogger().addHandler(handler)
+
+    logger = logging.getLogger(DEFAULT_LOGGER)
 
     targets = Targets(options.targets)
 
@@ -438,11 +461,11 @@ def main(argv):
             addSingleRepo(path[1], repos, targets=targets, skip=skip)
 
     for repo in repos:
-        print repo.getStatusString()
+        print(repo.getStatusString())
         if not options.quiet:
             warningsString = repo.getWarningsString()
             if 0 < len(warningsString):
-                print warningsString
+                print(warningsString)
 
     return 0
 
