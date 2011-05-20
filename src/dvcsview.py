@@ -39,7 +39,7 @@ configuration of DVCS View.
 """
 
 __author__ = "Samuel Spiza <sam.spiza@gmail.com>"
-__version__ = "0.3"
+__version__ = "0.3.1"
 
 import re
 import os
@@ -133,6 +133,9 @@ class WrappedFile:
     """File object that returns all lines striped on the left."""
     def __init__(self, path):
         self.file = open(path, "r")
+
+    def __iter__(self):
+        return self.file.__iter__()
 
     def readline(self):
         return self.file.readline().lstrip()
