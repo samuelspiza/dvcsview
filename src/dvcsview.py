@@ -39,7 +39,7 @@ configuration of DVCS View.
 """
 
 __author__ = "Samuel Spiza <sam.spiza@gmail.com>"
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 
 import re
 import os
@@ -390,7 +390,7 @@ class Targets:
         return not url in self.resolveList(self.SEP.join(self.alias.keys()))
 
     def promtUser(self, url):
-        keys = self.alias.keys()
+        keys = list(self.alias.keys())
         if 0 < len(keys):
             print("Current alias:")
             out = keys[0]
@@ -403,15 +403,16 @@ class Targets:
             print(out)
         out = "add '%s' to alias (list alias seperated by '%s'):\n"
         addTo = input(out % (url, self.SEP))
-        addToList = set([e.strip() for e in addTo.split(self.SEP)])
-        for alias in addToList:
-            if self.config.has_option(self.SECTION, alias):
-                self.config.set(self.SECTION, alias,
-                                self.config.get(self.SECTION, alias) + \
-                                self.SEP + url)
-            else:
-                self.config.set(self.SECTION, alias, url)
-        self.write()
+        if 0 < len(addTo.strip()):
+            addToList = set([e.strip() for e in addTo.split(self.SEP)])
+            for alias in addToList:
+                if self.config.has_option(self.SECTION, alias):
+                    self.config.set(self.SECTION, alias,
+                                    self.config.get(self.SECTION, alias) + \
+                                    self.SEP + url)
+                else:
+                    self.config.set(self.SECTION, alias, url)
+            self.write()
         self.readAlias()
         self.resolvedList = self.resolveList(self.list)
 
