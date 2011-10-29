@@ -39,7 +39,7 @@ configuration of DVCS View.
 """
 
 __author__ = "Samuel Spiza <sam.spiza@gmail.com>"
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 
 import re
 import os
@@ -148,9 +148,10 @@ class Repo:
         self.config = self.getConfig()
         ipseg = "[12]?[0-9]{1,2}"
         ip = "(?<=@)(?:" + ipseg + "\.){3}" + ipseg + "(?=[:/])"
-        url = "(?<=[/@\.])[a-z0-9-]*\.(?:com|de|net|org)(?=[:/])"
+        url = "(?<=[/@\.])[a-z0-9-]+\.(?:com|de|net|org)(?=[:/])"
         d = "^(?:/[a-z]+(?=/)|[a-z]:)"
-        regexp = "|".join([ip, url, d])
+        host = "(?<=[/@])[a-z0-9-]+(?=[:/])"
+        regexp = "|".join([ip, url, d, host])
         self.re = re.compile(regexp)
         self.fetch()
         self.status = None
