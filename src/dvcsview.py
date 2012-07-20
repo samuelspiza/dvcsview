@@ -229,7 +229,9 @@ class Git(Repo):
     replace = [("Your branch is ahead of '\w*/\w*' by ([0-9]* commits?).",
                 "ahead: \g<1>"),
                ("Changes to be committed:", "Changes to be committed")]
-    skip = ["# Changed but not updated:", "# Untracked files:"]
+    skip = ["# Changed but not updated:",
+            "# Untracked files:",
+            "# Changes not staged for commit:"]
 
     def __init__(self, path, targets=[]):
         self.trackingbranches = None
