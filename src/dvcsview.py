@@ -39,7 +39,7 @@ configuration of DVCS View.
 """
 
 __author__ = "Samuel Spiza <sam.spiza@gmail.com>"
-__version__ = "0.3.3"
+__version__ = "0.3.3a"
 
 import re
 import os
